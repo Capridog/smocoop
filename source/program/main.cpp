@@ -346,6 +346,55 @@ HOOK_DEFINE_TRAMPOLINE(ResourceFindOrCreateHook) {
     }
 };
 
+// ResourceSystem::createResource inlines the TextureArc load ("ObjectData/<TextureArc>" ->
+// findResourceCore / findResourceCategory / createResource), bypassing findOrCreateResource.
+// Without these, Luigi's parts kept Mario's MarioHeadTexture (red cap with the M).
+HOOK_DEFINE_TRAMPOLINE(FindResourceCoreHook) {
+    static void* Callback(void* system, const coop::luigi::SafeStr* name, void* outIter) {
+        const char* r = name ? coop::luigi::Rename(name->str) : nullptr;
+        if (r == nullptr) return Orig(system, name, outIter);
+        coop::luigi::SafeStr renamed = coop::luigi::MakeSafe(r);
+        return Orig(system, &renamed, outIter);
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(FindResourceCategoryHook) {
+    static void* Callback(void* system, const coop::luigi::SafeStr* name) {
+        const char* r = name ? coop::luigi::Rename(name->str) : nullptr;
+        if (r == nullptr) return Orig(system, name);
+        coop::luigi::SafeStr renamed = coop::luigi::MakeSafe(r);
+        return Orig(system, &renamed);
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(CreateResourceHook) {
+    static void* Callback(void* system, const coop::luigi::SafeStr* name, void* category,
+                          const char* ext) {
+        const char* r = name ? coop::luigi::Rename(name->str) : nullptr;
+        if (r == nullptr) return Orig(system, name, category, ext);
+        coop::luigi::SafeStr renamed = coop::luigi::MakeSafe(r);
+        return Orig(system, &renamed, category, ext);
+    }
+};
+
+// ------------------------------------------------------------------------ exits (ChangeStageArea)
+// rs::tryChangeNextStage(GameDataHolder*, Scene*) 0x4d2c54 (Ghidra) only asks whether player 0 is
+// in a ChangeStageArea, then GameDataFunction::findAreaAndChangeNextStage(writer, player, nullptr)
+// and ends the stage when the holder's change flags (+0x49/+0x4a) are set. Let P2 use exits too.
+HOOK_DEFINE_TRAMPOLINE(TryChangeNextStageHook) {
+    static bool Callback(void* holder, void* scene) {
+        if (coop::gP2 != nullptr && coop::gP1 != nullptr && !coop::gGameOver &&
+            !al::isDead(coop::gP2) &&
+            !rs::isInChangeStageArea(coop::gP1, nullptr) &&
+            rs::isInChangeStageArea(coop::gP2, nullptr)) {
+            COOP_LOG("Exit: P2 walked into a ChangeStageArea");
+            GameDataFunction::findAreaAndChangeNextStage(GameDataHolderWriter{holder}, coop::gP2,
+                                                         nullptr);
+        }
+        return Orig(holder, scene);
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(FindResourceHook) {
     static void* Callback(const coop::luigi::SafeStr* name) {
         const char* r = name ? coop::luigi::Rename(name->str) : nullptr;
@@ -1463,7 +1512,12 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(GameDataFunction_getCurrentCostumeTypeName,
                          GameDataFunction_getCurrentCostumeTypeName_bytes) &&
               CheckBytes(GameDataFunction_getCurrentCapTypeName,
-                         GameDataFunction_getCurrentCapTypeName_bytes);
+                         GameDataFunction_getCurrentCapTypeName_bytes) &&
+              CheckBytes(ResourceSystem_findResourceCore, ResourceSystem_findResourceCore_bytes) &&
+              CheckBytes(ResourceSystem_findResourceCategory,
+                         ResourceSystem_findResourceCategory_bytes) &&
+              CheckBytes(ResourceSystem_createResource, ResourceSystem_createResource_bytes) &&
+              CheckBytes(rs_tryChangeNextStage, rs_tryChangeNextStage_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1506,6 +1560,10 @@ extern "C" void exl_main(void* x0, void* x1) {
     WearCapHook::InstallAtOffset(GameDataFunction_wearCap);
     GetCostumeNameHook::InstallAtOffset(GameDataFunction_getCurrentCostumeTypeName);
     GetCapNameHook::InstallAtOffset(GameDataFunction_getCurrentCapTypeName);
+    FindResourceCoreHook::InstallAtOffset(ResourceSystem_findResourceCore);
+    FindResourceCategoryHook::InstallAtOffset(ResourceSystem_findResourceCategory);
+    CreateResourceHook::InstallAtOffset(ResourceSystem_createResource);
+    TryChangeNextStageHook::InstallAtOffset(rs_tryChangeNextStage);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

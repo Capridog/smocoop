@@ -15,6 +15,11 @@ struct Vector2 { T x, y; };
 using Vector2f = Vector2<float>;
 class Heap;
 }  // namespace sead
+// GameDataHolderWriter is one GameDataHolder* passed by value (Ghidra: wearCostume reads
+// param_1+0x20 = GameDataFile*).
+struct GameDataHolderWriter {
+    void* holder;
+};
 
 namespace al {
 class ActorInitInfo;
@@ -72,10 +77,14 @@ namespace rs {
 // Player-aware ground check (0x571224). al::isOnGround must NOT be used on players:
 // it dereferences actor+0x78 (al::Collider), which players don't have -> null crash.
 bool isPlayerOnGround(const al::LiveActor* actor);
+bool isInChangeStageArea(const al::LiveActor* actor, const sead::Vector3f* pos);  // 0x544de0
 }  // namespace rs
 
 namespace GameDataFunction {
 void recoveryPlayerMax(const al::LiveActor* actor);  // 0x528780: shared life counter to max
+// 0x527c50: find the ChangeStageArea at the actor (or pos) and request that stage change.
+void findAreaAndChangeNextStage(GameDataHolderWriter writer, const al::LiveActor* actor,
+                                const sead::Vector3f* pos);
 }
 
 namespace alCollisionUtil {
@@ -278,6 +287,16 @@ constexpr ptrdiff_t GameDataFunction_getCurrentCostumeTypeName = 0x52b48c;
 constexpr u64 GameDataFunction_getCurrentCostumeTypeName_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t GameDataFunction_getCurrentCapTypeName = 0x52b4bc;
 constexpr u64 GameDataFunction_getCurrentCapTypeName_bytes = 0xa9017bfdf81e0ff3ULL;
+// ResourceSystem internals reached by the inlined TextureArc load in createResource (0xa7d2c8).
+constexpr ptrdiff_t ResourceSystem_findResourceCore = 0xa7d760;  // (this, name, iterator*)
+constexpr u64 ResourceSystem_findResourceCore_bytes = 0xa9015ff8a9bb67faULL;
+constexpr ptrdiff_t ResourceSystem_findResourceCategory = 0xa7d8f8;  // (this, name)
+constexpr u64 ResourceSystem_findResourceCategory_bytes = 0xa90157f6d10103ffULL;
+constexpr ptrdiff_t ResourceSystem_createResource = 0xa7d2c8;  // (this, name, category, ext)
+constexpr u64 ResourceSystem_createResource_bytes = 0xa9015ff8f81b0ffcULL;
+// rs::tryChangeNextStage(GameDataHolder*, al::Scene*) -> bool
+constexpr ptrdiff_t rs_tryChangeNextStage = 0x4d2c54;
+constexpr u64 rs_tryChangeNextStage_bytes = 0xa9024ff4d10103ffULL;
 constexpr u64 al_findResource_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t CounterLifeCtrl_normalLayout = 0x18;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;
