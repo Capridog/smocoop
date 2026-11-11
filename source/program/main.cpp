@@ -395,9 +395,14 @@ static al::LiveActor* BubbleTargetOfState(const void* state) {
 // vertical arc a*t^2 + b*t with a=+0x48, b=+0x4c, a+b = vertical offset; verified in Ghidra), so a
 // brother who keeps moving would be met at his OLD spot. Every few frames we re-aim the safety point
 // at the brother's current position and update the horizontal offset and arc end height.
-static void RetargetBubble(void* state, al::LiveActor* target) {
+// Smooth re-aiming: on the first frame we pick a safe spot beside the brother and remember its
+// offset from him; afterwards the aim point is (brother's position + that offset), eased toward
+// every frame, so the bubble curves smoothly instead of hopping between recalculated spots.
+static sead::Vector3f gAimOffset[2] = {};
+static sead::Vector3f gAim[2] = {};
+
+static void ApplyBubbleAim(void* state, const sead::Vector3f& spot) {
     auto* sp = coop::Field<PlayerRecoverySafetyPoint*>(state, smo100::RecoveryDead_safetyPoint);
-    sead::Vector3f spot = coop::FindSpotBeside(target);
     sead::Vector3f up1 = {0.0f, 1.0f, 0.0f};
     sp->setSafetyPoint(spot, up1, nullptr);
     auto start = coop::Field<sead::Vector3f>(state, smo100::RecoveryDead_start);
@@ -411,16 +416,36 @@ static void RetargetBubble(void* state, al::LiveActor* target) {
     coop::SetField<float>(state, smo100::RecoveryDead_arcB, b + (vert - (a + b)));
 }
 
+static s32 BubbleSlot(const void* state) {
+    auto* actor = coop::Field<al::LiveActor*>(state, smo100::ActorStateBase_actor);
+    return actor == coop::gP1 ? 0 : 1;
+}
+
 HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
     static void Callback(void* state) {
         auto* nerveUser = reinterpret_cast<al::IUseNerve*>(state);
         bool first = al::isFirstStep(nerveUser);
         al::LiveActor* target = BubbleTargetOfState(state);
-        if (!first && target != nullptr && al::getNerveStep(nerveUser) % 6 == 0)
-            RetargetBubble(state, target);
+        s32 slot = BubbleSlot(state);
+        if (!first && target != nullptr) {
+            const sead::Vector3f& t = al::getTrans(target);
+            sead::Vector3f want = {t.x + gAimOffset[slot].x, t.y + gAimOffset[slot].y,
+                                   t.z + gAimOffset[slot].z};
+            sead::Vector3f& aim = gAim[slot];
+            aim.x += (want.x - aim.x) * 0.2f;
+            aim.y += (want.y - aim.y) * 0.2f;
+            aim.z += (want.z - aim.z) * 0.2f;
+            ApplyBubbleAim(state, aim);
+        }
         Orig(state);
         if (!first) return;
-        if (target != nullptr) RetargetBubble(state, target);  // aim at the current position now
+        if (target != nullptr) {
+            sead::Vector3f spot = coop::FindSpotBeside(target);
+            const sead::Vector3f& t = al::getTrans(target);
+            gAimOffset[slot] = {spot.x - t.x, spot.y - t.y, spot.z - t.z};
+            gAim[slot] = spot;
+            ApplyBubbleAim(state, spot);
+        }
         if (CoopBubbleIndexOfState(state) < 0) return;
         s32 fly = coop::Field<s32>(state, smo100::RecoveryDead_flightFrames) / 2;
         if (fly < kCoopFlyMin) fly = kCoopFlyMin;
