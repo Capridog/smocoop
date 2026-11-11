@@ -294,6 +294,17 @@ struct SafeStr {  // sead::SafeStringBase<char>: vtable, mStringTop
     void* vtable;
     const char* str;
 };
+// The incoming name is often a StringTmp (BufferedSafeString): its vtable's
+// assureTerminationImpl_ uses the buffer size field, which a 16-byte copy does not have. Use the
+// plain sead::SafeStringBase<char> vtable the game itself uses for temporary names
+// (GOT main+0x1e4ebb8, +0x10; seen in findOrCreateActorResourceWithAnimResource).
+static SafeStr MakeSafe(const char* str) {
+    u64 vt;
+    std::memcpy(&vt, reinterpret_cast<const void*>(exl::util::modules::GetTargetStart() +
+                                                   smo100::GOT_SafeStringBase_vtable),
+                sizeof(vt));
+    return SafeStr{reinterpret_cast<void*>(vt + 0x10), str};
+}
 }  // namespace coop::luigi
 
 HOOK_DEFINE_TRAMPOLINE(FindOrCreateActorResourceHook) {
@@ -316,7 +327,7 @@ HOOK_DEFINE_TRAMPOLINE(ResourceFindOrCreateHook) {
     static void* Callback(void* system, const coop::luigi::SafeStr* name, const char* ext) {
         const char* r = name ? coop::luigi::Rename(name->str) : nullptr;
         if (r == nullptr) return Orig(system, name, ext);
-        coop::luigi::SafeStr renamed{name->vtable, r};
+        coop::luigi::SafeStr renamed = coop::luigi::MakeSafe(r);
         return Orig(system, &renamed, ext);
     }
 };
@@ -325,7 +336,7 @@ HOOK_DEFINE_TRAMPOLINE(FindResourceHook) {
     static void* Callback(const coop::luigi::SafeStr* name) {
         const char* r = name ? coop::luigi::Rename(name->str) : nullptr;
         if (r == nullptr) return Orig(name);
-        coop::luigi::SafeStr renamed{name->vtable, r};
+        coop::luigi::SafeStr renamed = coop::luigi::MakeSafe(r);
         return Orig(&renamed);
     }
 };
