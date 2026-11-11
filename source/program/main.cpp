@@ -3,6 +3,7 @@
 #include "program/loggers.hpp"
 
 #include <cstring>
+#include <new>
 
 // ---------------------------------------------------------------------------------------------
 // Odyssey Co-op (rebuild). Targets SMO 1.0.0 only; refuses to install on any other build.
@@ -190,6 +191,9 @@ namespace coop::echo {
 static void Reset();
 static void Install(al::LiveActor* player, s32 idx);
 }  // namespace coop::echo
+namespace coop::hud {
+static void Reset();
+}  // namespace coop::hud
 
 // ---------------------------------------------------------------------------- spawning (step 2)
 
@@ -198,6 +202,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
         coop::ResetStageState();
         coop::cam::Reset();
         coop::echo::Reset();
+        coop::hud::Reset();
         coop::gInStageSceneInit = true;
         Orig(scene, info);
         coop::gInStageSceneInit = false;
@@ -1051,11 +1056,67 @@ HOOK_DEFINE_TRAMPOLINE(MakeLookAtHook) {
     }
 };
 
+// ------------------------------------------------------------------------- P2 hearts on screen
+// A second copy of the game's own heart gauge, shown to the left of Mario's whenever his is
+// shown, fed from P2's hearts.
+namespace coop::hud {
+static void* gCtrl = nullptr;        // CounterLifeCtrl of this stage
+static CounterLife* gP2Life = nullptr;
+static s32 gShownHp = -1;
+constexpr float kOffsetX = -150.0f;
+
+static al::LayoutActor* AsLayout(void* p) { return reinterpret_cast<al::LayoutActor*>(p); }
+static al::IUseLayout* LayoutOf(void* p) {
+    return reinterpret_cast<al::IUseLayout*>(reinterpret_cast<u8*>(p) + 0x8);
+}
+static al::IUseLayoutAction* ActionOf(void* p) {
+    return reinterpret_cast<al::IUseLayoutAction*>(reinterpret_cast<u8*>(p) + 0x10);
+}
+static void Reset() { gCtrl = nullptr; gP2Life = nullptr; gShownHp = -1; }
+static void ApplyCount() {
+    float max = al::getActionFrameMax(ActionOf(gP2Life), "Gauge", "Gauge");
+    gP2Life->setCount(max - max * ((float)coop::gP2Hp / (float)coop::kP2MaxHp));
+    al::setPaneStringFormat(LayoutOf(gP2Life), "TxtLife", "%d", coop::gP2Hp);
+    gShownHp = coop::gP2Hp;
+}
+static void Update() {
+    if (gCtrl == nullptr || gP2Life == nullptr) return;
+    void* primary = coop::Field<void*>(gCtrl, smo100::CounterLifeCtrl_normalLayout);
+    bool show = coop::gP2 != nullptr && primary != nullptr && !al::isDead(AsLayout(primary));
+    if (!show) {
+        al::killLayoutIfActive(AsLayout(gP2Life));
+        return;
+    }
+    if (al::isDead(AsLayout(gP2Life))) {
+        gP2Life->start();
+        ApplyCount();
+    } else if (gShownHp != coop::gP2Hp) {
+        ApplyCount();
+    }
+    sead::Vector3f t = al::getPaneLocalTrans(LayoutOf(primary), "All");
+    t.x += kOffsetX;
+    al::setPaneLocalTrans(LayoutOf(gP2Life), "All", t);
+}
+}  // namespace coop::hud
+
+HOOK_DEFINE_TRAMPOLINE(CounterLifeCtrlCtorHook) {
+    static void Callback(void* self, const al::LayoutInitInfo& info, const void* playerHolder,
+                         const void* subCamera) {
+        Orig(self, info, playerHolder, subCamera);
+        coop::hud::gCtrl = self;
+        void* mem = ::operator new(0x140);
+        coop::hud::gP2Life = new (mem) CounterLife("CounterLifeP2", "CounterLife", info);
+        coop::hud::gShownHp = -1;
+        COOP_LOG("P2 heart gauge created");
+    }
+};
+
 // --------------------------------------------------------------------- per-frame (placement)
 
 HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
     static void Callback(StageScene* scene) {
         Orig(scene);
+        coop::hud::Update();
         coop::cam::Update();
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return;
 
@@ -1114,7 +1175,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(GameDataFunction_recoveryPlayer, GameDataFunction_recoveryPlayer_bytes) &&
               CheckBytes(GameDataFunction_isPlayerHitPointMax, GameDataFunction_isPlayerHitPointMax_bytes) &&
               CheckBytes(Dokan_attackSensor, Dokan_attackSensor_bytes) &&
-              CheckBytes(DokanStageChange_attackSensor, DokanStageChange_attackSensor_bytes);
+              CheckBytes(DokanStageChange_attackSensor, DokanStageChange_attackSensor_bytes) &&
+              CheckBytes(CounterLifeCtrl_ctor, CounterLifeCtrl_ctor_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1145,6 +1207,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     HitPointMaxHook::InstallAtOffset(GameDataFunction_isPlayerHitPointMax);
     DokanAttackHook::InstallAtOffset(Dokan_attackSensor);
     DokanStageChangeAttackHook::InstallAtOffset(DokanStageChange_attackSensor);
+    CounterLifeCtrlCtorHook::InstallAtOffset(CounterLifeCtrl_ctor);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

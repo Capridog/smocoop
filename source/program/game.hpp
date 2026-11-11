@@ -32,6 +32,16 @@ bool isInDeathArea(const LiveActor* actor);                       // 0x8d6bb8
 class IUseAreaObj;
 class AreaObj;
 bool isInDeathArea(const IUseAreaObj* user, const sead::Vector3f& pos);  // 0x8050ec
+class LayoutActor;
+class IUseLayout;
+class IUseLayoutAction;
+class LayoutInitInfo;
+bool isDead(const LayoutActor* layout);                               // 0x8b1f00
+void killLayoutIfActive(LayoutActor* layout);                         // 0x8b1e98
+sead::Vector3f getPaneLocalTrans(const IUseLayout* user, const char* pane);            // 0x8b2888
+void setPaneLocalTrans(IUseLayout* user, const char* pane, const sead::Vector3f& t);   // 0x8b26ac
+float getActionFrameMax(const IUseLayoutAction* user, const char* action, const char* group);  // 0x8b0ce0
+void setPaneStringFormat(IUseLayout* user, const char* pane, const char* fmt, ...);    // 0x8b41d0
 class IUseCollision;
 class HitSensor;
 LiveActor* getSensorHost(const HitSensor* sensor);  // 0x8f1ec0
@@ -75,6 +85,17 @@ bool getHitPosOnArrow(const al::IUseCollision* user, sead::Vector3f* out,
 namespace alPlayerFunction {
 void registerPlayer(al::LiveActor* actor, al::PadRumbleKeeper* keeper);  // 0x9a4fe4
 }
+
+// The heart gauge layout (0x140 bytes). CounterLifeCtrl owns three of them: +0x18 normal,
+// +0x20 bonus hearts, +0x28 kids mode. LayoutActor: IUseLayout at +0x8, IUseLayoutAction at +0x10.
+// CounterLifeCtrl::setCount: gauge frame = max - max * (hp / maxHp) on action "Gauge", number text
+// in pane "TxtLife"; root pane "All".
+class CounterLife {
+public:
+    CounterLife(const char* name, const char* archive, const al::LayoutInitInfo& info);  // 0x1e53c4
+    void start();            // 0x1e5750
+    void setCount(float f);  // 0x1e5734
+};
 
 class PlayerActorBase;
 class PlayerRecoverySafetyPoint {
@@ -215,6 +236,9 @@ constexpr ptrdiff_t Dokan_attackSensor = 0x2576ec;
 constexpr u64 Dokan_attackSensor_bytes = 0xf90023f5d101c3ffULL;
 constexpr ptrdiff_t DokanStageChange_attackSensor = 0x25daf4;
 constexpr u64 DokanStageChange_attackSensor_bytes = 0xf90023f5d101c3ffULL;
+constexpr ptrdiff_t CounterLifeCtrl_ctor = 0x1e5bd0;
+constexpr u64 CounterLifeCtrl_ctor_bytes = 0xa90157f6d10103ffULL;
+constexpr ptrdiff_t CounterLifeCtrl_normalLayout = 0x18;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;
 constexpr u64 PlayerRecoverySafetyPoint_endRecovery_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t RecoveryDead_flightFrames = 0x74;
