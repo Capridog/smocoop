@@ -120,6 +120,19 @@ constexpr ptrdiff_t LiveActor_IUseAreaObj = 0x28;
 //  PlayerRecoverySafetyPoint's first field (+0x0) is its player actor (isValid/setSafetyPoint).
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_player = 0x0;
 
+// Camera (verified in Ghidra, 1.0.0):
+//  al::CameraPoser::calcCameraPose: makeLookAtCameraPrev -> vtable makeLookAtCamera (base version
+//  at 0xcc684 is an empty `ret`, used by posers that don't override it, e.g. follow cameras) ->
+//  CameraParamMoveLimit::apply -> CameraArrowCollider::makeLookAtCamera (keeps camera out of walls).
+//  sead::LookAtCamera: pos at +0x38, at +0x44, up +0x50 (from its constructor).
+//  PlayerCameraTarget::calcTrans(out) is the follow point StageScene::init gives the camera for P1.
+constexpr ptrdiff_t PlayerCameraTarget_calcTrans = 0xce9b8;
+constexpr u64 PlayerCameraTarget_calcTrans_bytes = 0xa9014ff4d100c3ffULL;
+constexpr ptrdiff_t CameraPoser_makeLookAtCamera = 0xcc684;
+constexpr u64 CameraPoser_makeLookAtCamera_bytes = 0x2a1f03e0d65f03c0ULL;
+constexpr ptrdiff_t LookAtCamera_pos = 0x38;
+constexpr ptrdiff_t LookAtCamera_at = 0x44;
+
 constexpr ptrdiff_t PlayerFunction_isPlayerHitPointOne = 0x447bdc;
 constexpr u64 PlayerFunction_isPlayerHitPointOne_bytes = 0xa9017bfdd10083ffULL;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_isValid = 0x460c90;

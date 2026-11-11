@@ -297,6 +297,72 @@ HOOK_DEFINE_TRAMPOLINE(SeeOddSpaceHook) {
     }
 };
 
+
+// ------------------------------------------------------------------------ shared camera (step 4)
+// 1) The follow point (PlayerCameraTarget::calcTrans, P1's camera target) is pulled toward the
+//    midpoint between the brothers.  2) Cameras that use the base CameraPoser::makeLookAtCamera are
+//    pulled back along their view line as the brothers separate. The game's CameraArrowCollider runs
+//    right after, so the zoomed camera is still kept out of walls.
+namespace coop::cam {
+constexpr float kZoomStart = 500.0f;   // separation where zoom-out begins
+constexpr float kZoomFull = 3000.0f;   // separation where zoom-out is at maximum
+constexpr float kZoomMax = 1.9f;       // max distance multiplier
+constexpr float kLerp = 0.08f;         // per-frame smoothing
+constexpr float kShareEnd = 5000.0f;   // beyond this the camera stops sharing and follows P1
+static float gZoom = 1.0f;
+static float gShare = 0.0f;
+
+static sead::Vector3f FocusPos(al::LiveActor* player, al::LiveActor* hack) {
+    return al::getTrans(hack ? hack : player);
+}
+static float Clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
+static bool Active() { return coop::gP1 != nullptr && coop::gP2 != nullptr && !al::isDead(coop::gP2); }
+static float Separation(sead::Vector3f* delta) {
+    sead::Vector3f a = al::getTrans(coop::gP1);
+    sead::Vector3f b = FocusPos(coop::gP2, coop::P2HackActor());
+    *delta = {b.x - a.x, b.y - a.y, b.z - a.z};
+    return __builtin_sqrtf(delta->x * delta->x + delta->z * delta->z);
+}
+}  // namespace coop::cam
+
+HOOK_DEFINE_TRAMPOLINE(CameraTargetHook) {
+    static void Callback(const void* target, sead::Vector3f* out) {
+        Orig(target, out);
+        using namespace coop::cam;
+        if (!Active()) { gShare = 0.0f; return; }
+        sead::Vector3f d;
+        float sep = Separation(&d);
+        // share the view 50/50 up to kZoomFull, then fade back to P1 by kShareEnd
+        float want = 0.5f * (1.0f - Clamp01((sep - kZoomFull) / (kShareEnd - kZoomFull)));
+        gShare += (want - gShare) * kLerp;
+        out->x += d.x * gShare;
+        out->y += d.y * gShare;
+        out->z += d.z * gShare;
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(MakeLookAtHook) {
+    static void Callback(const void* poser, void* lookAt) {
+        Orig(poser, lookAt);
+        using namespace coop::cam;
+        float want = 1.0f;
+        if (Active()) {
+            sead::Vector3f d;
+            float sep = Separation(&d);
+            want = 1.0f + (kZoomMax - 1.0f) * Clamp01((sep - kZoomStart) / (kZoomFull - kZoomStart));
+        }
+        gZoom += (want - gZoom) * kLerp;
+        if (gZoom < 1.001f) return;
+        auto pos = coop::Field<sead::Vector3f>(lookAt, smo100::LookAtCamera_pos);
+        auto at = coop::Field<sead::Vector3f>(lookAt, smo100::LookAtCamera_at);
+        sead::Vector3f v = {pos.x - at.x, pos.y - at.y, pos.z - at.z};
+        float len2 = v.x * v.x + v.y * v.y + v.z * v.z;
+        if (len2 < 300.0f * 300.0f) return;  // first-person / very close cameras: leave alone
+        sead::Vector3f np = {at.x + v.x * gZoom, at.y + v.y * gZoom, at.z + v.z * gZoom};
+        coop::SetField<sead::Vector3f>(lookAt, smo100::LookAtCamera_pos, np);
+    }
+};
+
 // --------------------------------------------------------------------- per-frame (placement)
 
 HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
@@ -346,7 +412,9 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(PlayerDamageKeeper_dead, PlayerDamageKeeper_dead_bytes) &&
               CheckBytes(PlayerFunction_isPlayerHitPointOne, PlayerFunction_isPlayerHitPointOne_bytes) &&
               CheckBytes(PlayerRecoverySafetyPoint_isValid, PlayerRecoverySafetyPoint_isValid_bytes) &&
-              CheckBytes(rs_isPlayerEnableToSeeOddSpace, rs_isPlayerEnableToSeeOddSpace_bytes);
+              CheckBytes(rs_isPlayerEnableToSeeOddSpace, rs_isPlayerEnableToSeeOddSpace_bytes) &&
+              CheckBytes(PlayerCameraTarget_calcTrans, PlayerCameraTarget_calcTrans_bytes) &&
+              CheckBytes(CameraPoser_makeLookAtCamera, CameraPoser_makeLookAtCamera_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -365,7 +433,9 @@ extern "C" void exl_main(void* x0, void* x1) {
     HitPointOneHook::InstallAtOffset(PlayerFunction_isPlayerHitPointOne);
     SafetyPointValidHook::InstallAtOffset(PlayerRecoverySafetyPoint_isValid);
     SeeOddSpaceHook::InstallAtOffset(rs_isPlayerEnableToSeeOddSpace);
-    COOP_LOG("Hooks installed (SMO 1.0.0, step 3b).");
+    CameraTargetHook::InstallAtOffset(PlayerCameraTarget_calcTrans);
+    MakeLookAtHook::InstallAtOffset(CameraPoser_makeLookAtCamera);
+    COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera).");
 }
 
 extern "C" NORETURN void exl_exception_entry() {
