@@ -353,7 +353,10 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
 };
 
 // Faster co-op bubble: the game's rescue bubble rises for 45 frames and then flies 60-120 frames.
-// For bubbles started by the co-op camera rule, rise for 12 frames and fly in 20-40 frames.
+// For bubbles started by the co-op off-screen rule: rise 24 frames, fly in 30-60 frames (half).
+constexpr s32 kCoopRiseFrames = 24;
+constexpr s32 kCoopFlyMin = 30;
+constexpr s32 kCoopFlyMax = 60;
 static s32 CoopBubbleIndexOfState(const void* state) {
     auto* actor = coop::Field<al::LiveActor*>(state, smo100::ActorStateBase_actor);
     for (s32 i = 0; i < 2; i++) {
@@ -368,7 +371,7 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryStartHook) {
         Orig(state);
         if (CoopBubbleIndexOfState(state) < 0) return;
         auto* nerveUser = reinterpret_cast<al::IUseNerve*>(state);
-        if (al::getNerveStep(nerveUser) >= 12) {
+        if (al::getNerveStep(nerveUser) >= kCoopRiseFrames) {
             auto* nrv = reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() +
                                                            smo100::NrvRecoveryDeadRecovery);
             al::setNerve(nerveUser, nrv);
@@ -382,10 +385,10 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
         bool first = al::isFirstStep(nerveUser);
         Orig(state);
         if (!first || CoopBubbleIndexOfState(state) < 0) return;
-        s32 fly = coop::Field<s32>(state, smo100::RecoveryDead_flightFrames) / 3;
-        if (fly < 20) fly = 20;
-        if (fly > 40) fly = 40;
-        s32 spin = coop::Field<s32>(state, smo100::RecoveryDead_spinFrames) / 3;
+        s32 fly = coop::Field<s32>(state, smo100::RecoveryDead_flightFrames) / 2;
+        if (fly < kCoopFlyMin) fly = kCoopFlyMin;
+        if (fly > kCoopFlyMax) fly = kCoopFlyMax;
+        s32 spin = coop::Field<s32>(state, smo100::RecoveryDead_spinFrames) / 2;
         if (spin < 1) spin = 1;
         coop::SetField<s32>(state, smo100::RecoveryDead_flightFrames, fly);
         coop::SetField<s32>(state, smo100::RecoveryDead_spinFrames, spin);
