@@ -111,6 +111,7 @@ static al::LiveActor* HackActorOf(al::LiveActor* player) {
 // point (PlayerActorHakoniwa+0x270). We point the safety point beside the other brother first.
 static s32 gForcedRecovery[2] = {0, 0};  // frames during which isValid() is forced true
 static bool gBubbleRequest[2] = {false, false};
+static s32 gBubbleBusy[2] = {0, 0};  // >0 while a bubble is in flight or just landed
 // Runs inside the player's own checkDeathArea (same place vanilla starts pit recovery).
 static void StartBubbleTo(al::LiveActor* who, al::LiveActor* to, s32 whoIdx) {
     using Fn = void (*)(al::LiveActor*, void*, void*, void*, void*, void*);
@@ -120,6 +121,7 @@ static void StartBubbleTo(al::LiveActor* who, al::LiveActor* to, s32 whoIdx) {
     sead::Vector3f up = {0.0f, 1.0f, 0.0f};
     sp->setSafetyPoint(spot, up, nullptr);
     gForcedRecovery[whoIdx] = 60 * 10;
+    gBubbleBusy[whoIdx] = 60 * 10;  // cleared (to a 1 s grace) when the bubble lands
     fn(who, Field<void*>(who, 0x148), Field<void*>(who, 0x1f8), Field<void*>(who, 0x1f0),
        Field<void*>(who, 0x200), Field<void*>(who, 0x3b8));
     COOP_LOG("Bubble: P%d left behind, floating to P%d at (%.0f, %.0f, %.0f)", whoIdx + 1,
@@ -395,6 +397,21 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
     }
 };
 
+// Bubble landed: allow new bubbles for that brother again after a 1 s grace.
+HOOK_DEFINE_TRAMPOLINE(EndRecoveryHook) {
+    static void Callback(PlayerRecoverySafetyPoint* sp) {
+        Orig(sp);
+        auto* owner = coop::Field<al::LiveActor*>(sp, smo100::PlayerRecoverySafetyPoint_player);
+        for (s32 i = 0; i < 2; i++) {
+            al::LiveActor* p = i == 0 ? coop::gP1 : coop::gP2;
+            if (p != nullptr && owner == p && coop::gBubbleBusy[i] > 60) {
+                coop::gBubbleBusy[i] = 60;
+                COOP_LOG("Bubble: P%d landed", i + 1);
+            }
+        }
+    }
+};
+
 // Moe-Eye: hidden platforms ask "is player 0 wearing the glasses?" (verified in Ghidra:
 // rs::isPlayerEnableToSeeOddSpace -> getPlayerActor(x,0) -> current hack == Megane). Show them when
 // either player is.
@@ -417,7 +434,7 @@ constexpr float kZoomFull = 2000.0f;   // separation where zoom-out is at maximu
 constexpr float kLeaderSep = 2000.0f;  // split-up distance: camera picks the leader
 constexpr float kLeaderRelease = 1500.0f;  // back together: shared view again
 constexpr float kBubbleSep = 1500.0f;  // minimum separation for a bubble (never when close)
-constexpr s32 kBubbleDelay = 2;        // frames off-screen before bubbling (noise filter only)
+constexpr s32 kBubbleDelay = 60;       // frames off-screen before bubbling (1 s grace)
 constexpr s32 kBubbleCooldown = 90;    // ~1.5 s: lets the bubble arrive before re-checking
 constexpr float kZoomMax = 1.9f;       // max distance multiplier
 constexpr float kLerp = 0.08f;         // per-frame smoothing (zoom)
@@ -471,6 +488,7 @@ static void Reset() {
     gFarFrames = 0; gBubbleCooldown = 0;
     coop::gForcedRecovery[0] = coop::gForcedRecovery[1] = 0;
     coop::gBubbleRequest[0] = coop::gBubbleRequest[1] = false;
+    coop::gBubbleBusy[0] = coop::gBubbleBusy[1] = 0;
 }
 // called once per frame from StageSceneControl
 static void Update() {
@@ -509,8 +527,10 @@ static void Update() {
     }
     gFarFrames = (offIdx >= 0 && offIdx == gFarIdx) ? gFarFrames + 1 : (offIdx >= 0 ? 1 : 0);
     gFarIdx = offIdx;
+    for (s32 i = 0; i < 2; i++)
+        if (coop::gBubbleBusy[i] > 0) coop::gBubbleBusy[i]--;
     if (offIdx >= 0 && gFarFrames >= kBubbleDelay && gBubbleCooldown == 0 &&
-        !coop::gBubbleRequest[offIdx]) {
+        !coop::gBubbleRequest[offIdx] && coop::gBubbleBusy[offIdx] == 0) {
         al::LiveActor* who = offIdx == 0 ? coop::gP1 : coop::gP2;
         al::LiveActor* to = offIdx == 0 ? coop::gP2 : coop::gP1;
         if (coop::HackActorOf(who) == nullptr && coop::HackActorOf(to) == nullptr) {
@@ -618,7 +638,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(PlayerRecoveryStart, PlayerRecoveryStart_bytes) &&
               CheckBytes(PlayerActorHakoniwa_checkDeathArea, PlayerActorHakoniwa_checkDeathArea_bytes) &&
               CheckBytes(PlayerStateRecoveryDead_exeStart, PlayerStateRecoveryDead_exeStart_bytes) &&
-              CheckBytes(PlayerStateRecoveryDead_exeRecovery, PlayerStateRecoveryDead_exeRecovery_bytes);
+              CheckBytes(PlayerStateRecoveryDead_exeRecovery, PlayerStateRecoveryDead_exeRecovery_bytes) &&
+              CheckBytes(PlayerRecoverySafetyPoint_endRecovery, PlayerRecoverySafetyPoint_endRecovery_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -642,6 +663,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     CheckDeathAreaHook::InstallAtOffset(PlayerActorHakoniwa_checkDeathArea);
     RecoveryStartHook::InstallAtOffset(PlayerStateRecoveryDead_exeStart);
     RecoveryFlyHook::InstallAtOffset(PlayerStateRecoveryDead_exeRecovery);
+    EndRecoveryHook::InstallAtOffset(PlayerRecoverySafetyPoint_endRecovery);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

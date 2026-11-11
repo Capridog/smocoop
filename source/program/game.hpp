@@ -168,6 +168,10 @@ constexpr ptrdiff_t PlayerStateRecoveryDead_exeRecovery = 0x479884;
 constexpr u64 PlayerStateRecoveryDead_exeRecovery_bytes = 0xfd002becd10303ffULL;
 constexpr ptrdiff_t NrvRecoveryDeadRecovery = 0x1d7eff8;
 constexpr ptrdiff_t ActorStateBase_actor = 0x18;
+// PlayerRecoverySafetyPoint::endRecovery: called when the bubble lands (RecoveryDead::exeFall) or
+// the state is killed. Its first field is the player.
+constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;
+constexpr u64 PlayerRecoverySafetyPoint_endRecovery_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t RecoveryDead_flightFrames = 0x74;
 constexpr ptrdiff_t RecoveryDead_spinFrames = 0x78;
 
