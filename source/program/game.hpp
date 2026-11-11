@@ -98,7 +98,7 @@ struct PlayerInitInfo {
     float trans[3];               // +0x28
     float quat[4];                // +0x34  (x, y, z, w)
     bool flag44;                  // +0x44
-    bool isClosetScene;           // +0x45
+    bool isClosetScene;           // +0x45  stage has a wardrobe (StageSceneStateCloset exists)
     u8 _pad46[2];                 // +0x46
 };
 static_assert(sizeof(PlayerInitInfo) == 0x48);

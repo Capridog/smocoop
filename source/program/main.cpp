@@ -217,8 +217,8 @@ HOOK_DEFINE_TRAMPOLINE(PlayerInitHook) {
 
         if (!coop::gInStageSceneInit || coop::gSpawningP2 || coop::gP2 != nullptr)
             return;
-        if (playerInfo.isClosetScene)
-            return;  // dressing-room preview player: never duplicate
+        // Note: PlayerInitInfo+0x45 only means "this stage has a wardrobe" (shops, the Odyssey);
+        // it is passed to the model init. P2 is spawned there too.
 
         s32 p2Port = al::getPlayerControllerPort(1);
         s32 p1Port = playerInfo.controllerPort;
