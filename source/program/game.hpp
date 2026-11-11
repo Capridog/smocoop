@@ -24,6 +24,11 @@ const sead::Vector3f& getTrans(const LiveActor* actor);           // 0x8ee66c
 void calcSideDir(sead::Vector3f* out, const LiveActor* actor);    // 0x8ee6ec
 void resetPosition(LiveActor* actor, const sead::Vector3f& trans);// 0x8e28b8
 void setVelocityZero(LiveActor* actor);                           // 0x8e2c68
+bool isDead(const LiveActor* actor);                              // 0x8d9980
+bool isInDeathArea(const LiveActor* actor);                       // 0x8d6bb8
+class IUseCollision;
+class CollisionPartsFilterBase;
+class TriangleFilterBase;
 s32 getMainControllerPort();                           // 0x85bfb0
 PadRumbleKeeper* createPadRumbleKeeper(const LiveActor* actor, s32 port);  // 0x86b710
 }  // namespace al
@@ -33,6 +38,14 @@ namespace rs {
 // it dereferences actor+0x78 (al::Collider), which players don't have -> null crash.
 bool isPlayerOnGround(const al::LiveActor* actor);
 }  // namespace rs
+
+namespace alCollisionUtil {
+// 0x84c390. Ray from `start` along `arrow` (direction * length); true + *out on hit.
+bool getHitPosOnArrow(const al::IUseCollision* user, sead::Vector3f* out,
+                      const sead::Vector3f& start, const sead::Vector3f& arrow,
+                      const al::CollisionPartsFilterBase* partsFilter,
+                      const al::TriangleFilterBase* triFilter);
+}  // namespace alCollisionUtil
 
 namespace alPlayerFunction {
 void registerPlayer(al::LiveActor* actor, al::PadRumbleKeeper* keeper);  // 0x9a4fe4
@@ -83,6 +96,28 @@ constexpr ptrdiff_t al_tryGetPlayerActor = 0x9a3fe4;
 //  HackCap::HackCap stores its owning player actor at this+0x128 (param_1[0x25]).
 constexpr ptrdiff_t PlayerActorHakoniwa_hackCap = 0x148;
 constexpr ptrdiff_t HackCap_player = 0x128;
+//  PlayerActorHakoniwa::getPlayerHackKeeper() returns *(this+0x208);
+//  PlayerHackKeeper::startHack stores the captured actor at keeper+0x68;
+//  PlayerActorHakoniwa::checkDeathArea uses *(this+0x198) as its PlayerDamageKeeper;
+//  PlayerDamageKeeper's first field (+0x0) is its player actor;
+//  PlayerJudgeDead::judge reads its player actor at this+0x8;
+//  al::LiveActor's IUseCollision base sits at +0x38 (callers pass actor+0x38).
+constexpr ptrdiff_t PlayerActorHakoniwa_hackKeeper = 0x208;
+constexpr ptrdiff_t PlayerHackKeeper_hackActor = 0x68;
+constexpr ptrdiff_t PlayerActorHakoniwa_damageKeeper = 0x198;
+constexpr ptrdiff_t PlayerJudgeDead_player = 0x8;
+constexpr ptrdiff_t LiveActor_IUseCollision = 0x38;
+
+constexpr ptrdiff_t PlayerJudgeDead_judge = 0x458e14;
+constexpr ptrdiff_t PlayerDamageKeeper_damage = 0x43f154;
+constexpr ptrdiff_t PlayerDamageKeeper_damageForce = 0x43f304;
+constexpr ptrdiff_t PlayerDamageKeeper_dead = 0x43f390;
+constexpr ptrdiff_t PlayerActorHakoniwa_checkDeathArea = 0x427200;
+constexpr u64 PlayerJudgeDead_judge_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr u64 PlayerDamageKeeper_damage_bytes = 0xf9000bf3d100c3ffULL;
+constexpr u64 PlayerDamageKeeper_damageForce_bytes = 0xf9000bf3d100c3ffULL;
+constexpr u64 PlayerDamageKeeper_dead_bytes = 0xa9017bfdd10083ffULL;
+constexpr u64 PlayerActorHakoniwa_checkDeathArea_bytes = 0xa90357f6d10183ffULL;
 
 constexpr u64 StageScene_init_bytes = 0xa9016ffcfc190fe8ULL;
 constexpr u64 PlayerActorHakoniwa_initPlayer_bytes = 0xa90167faa9ba6ffcULL;
