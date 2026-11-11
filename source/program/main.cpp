@@ -163,7 +163,17 @@ static void CallRecoveryRoutine(al::LiveActor* who) {
        Field<void*>(who, 0x200), Field<void*>(who, 0x3b8));
 }
 
+static s32 gIgnoreJumps = 0;  // frames during which position jumps are our own teleports
+static void PlaceBeside(al::LiveActor* who, al::LiveActor* anchor, const char* why) {
+    sead::Vector3f dst = FindSpotBeside(anchor);
+    al::resetPosition(who, dst);
+    al::setVelocityZero(who);
+    gIgnoreJumps = 3;
+    COOP_LOG("P%d placed beside P%d (%s) at (%.0f, %.0f, %.0f)", who == gP1 ? 1 : 2,
+             anchor == gP1 ? 1 : 2, why, dst.x, dst.y, dst.z);
+}
 static void PlaceP2BesideP1(const char* why) {
+    gIgnoreJumps = 3;
     sead::Vector3f dst = FindSpotBesideP1();
     al::resetPosition(gP2, dst);
     al::setVelocityZero(gP2);
@@ -630,6 +640,12 @@ constexpr float kLerp = 0.08f;         // per-frame smoothing (zoom)
 constexpr float kShareLerp = 0.12f;    // per-frame smoothing (who the camera looks at)
 static s32 gFarFrames = 0;
 static s32 gFarIdx = -1;
+constexpr float kWarpJump = 500.0f;    // per-frame move that can only be a teleport
+static sead::Vector3f gPrevRaw[2] = {};
+static bool gPrevHack[2] = {false, false};
+static bool gHaveRaw = false;
+static s32 gWarpFollow = -1;           // brother who still has to follow through a pipe/door
+static s32 gWarpWait = 0;
 static s32 gBubbleCooldown = 0;
 static float gZoom = 1.0f;
 static float gShare = 0.0f;            // 0 = P1, 0.5 = midpoint, 1 = P2
@@ -675,13 +691,14 @@ static bool IsOffScreen(al::LiveActor* actor) {
 static void Reset() {
     gZoom = 1.0f; gShare = 0.0f; gMoveP1 = gMoveP2 = 0.0f; gHavePrev = false; gLeader = -1;
     gFarFrames = 0; gBubbleCooldown = 0;
+    gHaveRaw = false; gWarpFollow = -1; gWarpWait = 0;
     coop::gForcedRecovery[0] = coop::gForcedRecovery[1] = 0;
     coop::gBubbleRequest[0] = coop::gBubbleRequest[1] = false;
     coop::gBubbleBusy[0] = coop::gBubbleBusy[1] = 0;
 }
 // called once per frame from StageSceneControl
 static void Update() {
-    if (!Active()) { gLeader = -1; gHavePrev = false; return; }
+    if (!Active()) { gLeader = -1; gHavePrev = false; gHaveRaw = false; return; }
     sead::Vector3f p1 = al::getTrans(coop::gP1);
     sead::Vector3f p2 = FocusPos(coop::gP2, coop::P2HackActor());
     if (gHavePrev) {
@@ -692,6 +709,43 @@ static void Update() {
         gMoveP2 += (m2 - gMoveP2) * 0.05f;
     }
     gPrevP1 = p1; gPrevP2 = p2; gHavePrev = true;
+
+    // Pipes / doors inside a stage: the game teleports the brother who went in (a position jump
+    // far beyond any normal movement). The other brother follows him through: he is put beside
+    // him as soon as he is out and standing, instead of waiting for the off-screen bubble.
+    {
+        sead::Vector3f raw[2] = {al::getTrans(coop::gP1), al::getTrans(coop::gP2)};
+        bool hack[2] = {coop::HackActorOf(coop::gP1) != nullptr,
+                        coop::HackActorOf(coop::gP2) != nullptr};
+        if (gHaveRaw && coop::gIgnoreJumps == 0 && !coop::gGameOver && gWarpFollow < 0) {
+            for (s32 i = 0; i < 2; i++) {
+                if (hack[i] || gPrevHack[i] || coop::gBubbleBusy[i] > 0) continue;
+                if (Dist(raw[i], gPrevRaw[i]) > kWarpJump) {
+                    gWarpFollow = 1 - i;
+                    gWarpWait = 0;
+                    COOP_LOG("Warp: P%d went through a pipe/door, P%d follows", i + 1, 2 - i);
+                    break;
+                }
+            }
+        }
+        if (coop::gIgnoreJumps > 0) coop::gIgnoreJumps--;
+        for (s32 i = 0; i < 2; i++) { gPrevRaw[i] = raw[i]; gPrevHack[i] = hack[i]; }
+        gHaveRaw = true;
+
+        if (gWarpFollow >= 0) {
+            gWarpWait++;
+            gBubbleCooldown = 90;  // no off-screen bubble while following through
+            gFarFrames = 0;
+            al::LiveActor* who = coop::PlayerAt(gWarpFollow);
+            al::LiveActor* anchor = coop::PlayerAt(1 - gWarpFollow);
+            bool ready = gWarpWait >= 20 && rs::isPlayerOnGround(anchor);
+            if (ready || gWarpWait > 60 * 5) {
+                if (!hack[gWarpFollow] && coop::gBubbleBusy[gWarpFollow] == 0)
+                    coop::PlaceBeside(who, anchor, "followed through pipe/door");
+                gWarpFollow = -1;
+            }
+        }
+    }
 
     sead::Vector3f d;
     float sep = Separation(&d);
