@@ -215,6 +215,91 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
     }
 };
 
+// ------------------------------------------------------------------------ Luigi (P2 look)
+// While P2's PlayerActorHakoniwa is initialised, every player archive it asks for is renamed to
+// the Luigi copy in romfs ObjectData/P2Luigi (Super Luigi Odyssey files, Tall Luigi bodies).
+// Names are rewritten where the game turns an archive name into a resource:
+//   al::findOrCreateActorResource / ...WithAnimResource (the ActorResource cache key)
+//   al::ResourceSystem::findOrCreateResource (TextureArc, byml lookups, model archives).
+// Each Luigi archive holds both "<Mario name>.bfres" and "P2Luigi<X>.bfres", so a renamed
+// resource finds its model. Renamed names are not in ResourceCategoryTable, so they load into
+// the current scene category and are freed with the stage. P1 is never touched.
+#include "program/luigi_files.hpp"
+namespace coop::luigi {
+constexpr bool kRedirectAnims = false;  // Mario's PlayerAnimation* drives Luigi's skeleton
+static char gBuf[8][160];
+static u32 gBufIdx = 0;
+static u32 gRedirects = 0;
+
+static bool InList(const char* const* list, size_t n, const char* key) {
+    size_t lo = 0, hi = n;
+    while (lo < hi) {
+        size_t mid = (lo + hi) / 2;
+        int c = std::strcmp(list[mid], key);
+        if (c == 0) return true;
+        if (c < 0) lo = mid + 1; else hi = mid;
+    }
+    return false;
+}
+
+// "ObjectData/MarioHead" -> "ObjectData/P2Luigi/P2LuigiHead" (only if the Luigi file exists).
+static const char* Redirect(const char* name) {
+    if (!gSpawningP2 || name == nullptr) return nullptr;
+    constexpr const char kDir[] = "ObjectData/";
+    if (std::strncmp(name, kDir, sizeof(kDir) - 1) != 0) return nullptr;
+    const char* base = name + sizeof(kDir) - 1;
+    const char* fmt = nullptr;
+    const char* rest = nullptr;
+    if (std::strncmp(base, "Mario", 5) == 0 &&
+        InList(kLuigiParts, sizeof(kLuigiParts) / sizeof(kLuigiParts[0]), base + 5)) {
+        fmt = "ObjectData/P2Luigi/P2Luigi"; rest = base + 5;
+    } else if (InList(kLuigiOther, sizeof(kLuigiOther) / sizeof(kLuigiOther[0]), base) ||
+               (kRedirectAnims &&
+                InList(kLuigiAnims, sizeof(kLuigiAnims) / sizeof(kLuigiAnims[0]), base))) {
+        fmt = "ObjectData/P2Luigi/P2Luigi_"; rest = base;
+    } else {
+        return nullptr;
+    }
+    size_t a = std::strlen(fmt), b = std::strlen(rest);
+    if (a + b + 1 > sizeof(gBuf[0])) return nullptr;
+    char* out = gBuf[gBufIdx++ & 7];
+    std::memcpy(out, fmt, a);
+    std::memcpy(out + a, rest, b + 1);
+    if (gRedirects++ < 64) COOP_LOG("Luigi: %s -> %s", name, out);
+    return out;
+}
+
+struct SafeStr {  // sead::SafeStringBase<char>: vtable, mStringTop
+    void* vtable;
+    const char* str;
+};
+}  // namespace coop::luigi
+
+HOOK_DEFINE_TRAMPOLINE(FindOrCreateActorResourceHook) {
+    static void* Callback(void* holder, const char* name, const char* suffix) {
+        const char* r = coop::luigi::Redirect(name);
+        return Orig(holder, r ? r : name, suffix);
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(FindOrCreateActorResourceAnimHook) {
+    static void* Callback(void* holder, const char* name, const char* animArc, const char* suffix,
+                          bool isMergeAnim) {
+        const char* r = coop::luigi::Redirect(name);
+        const char* ra = coop::luigi::Redirect(animArc);
+        return Orig(holder, r ? r : name, ra ? ra : animArc, suffix, isMergeAnim);
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(ResourceFindOrCreateHook) {
+    static void* Callback(void* system, const coop::luigi::SafeStr* name, const char* ext) {
+        const char* r = name ? coop::luigi::Redirect(name->str) : nullptr;
+        if (r == nullptr) return Orig(system, name, ext);
+        coop::luigi::SafeStr renamed{name->vtable, r};
+        return Orig(system, &renamed, ext);
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(PlayerInitHook) {
     static void Callback(PlayerActorHakoniwa* self, const al::ActorInitInfo& actorInfo,
                          const PlayerInitInfo& playerInfo) {
@@ -1205,7 +1290,11 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(GameDataFunction_isPlayerHitPointMax, GameDataFunction_isPlayerHitPointMax_bytes) &&
               CheckBytes(Dokan_attackSensor, Dokan_attackSensor_bytes) &&
               CheckBytes(DokanStageChange_attackSensor, DokanStageChange_attackSensor_bytes) &&
-              CheckBytes(CounterLifeCtrl_ctor, CounterLifeCtrl_ctor_bytes);
+              CheckBytes(CounterLifeCtrl_ctor, CounterLifeCtrl_ctor_bytes) &&
+              CheckBytes(al_findOrCreateActorResource, al_findOrCreateActorResource_bytes) &&
+              CheckBytes(al_findOrCreateActorResourceWithAnimResource,
+                         al_findOrCreateActorResourceWithAnimResource_bytes) &&
+              CheckBytes(ResourceSystem_findOrCreateResource, ResourceSystem_findOrCreateResource_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1237,6 +1326,9 @@ extern "C" void exl_main(void* x0, void* x1) {
     DokanAttackHook::InstallAtOffset(Dokan_attackSensor);
     DokanStageChangeAttackHook::InstallAtOffset(DokanStageChange_attackSensor);
     CounterLifeCtrlCtorHook::InstallAtOffset(CounterLifeCtrl_ctor);
+    FindOrCreateActorResourceHook::InstallAtOffset(al_findOrCreateActorResource);
+    FindOrCreateActorResourceAnimHook::InstallAtOffset(al_findOrCreateActorResourceWithAnimResource);
+    ResourceFindOrCreateHook::InstallAtOffset(ResourceSystem_findOrCreateResource);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

@@ -238,6 +238,17 @@ constexpr ptrdiff_t DokanStageChange_attackSensor = 0x25daf4;
 constexpr u64 DokanStageChange_attackSensor_bytes = 0xf90023f5d101c3ffULL;
 constexpr ptrdiff_t CounterLifeCtrl_ctor = 0x1e5bd0;
 constexpr u64 CounterLifeCtrl_ctor_bytes = 0xa90157f6d10103ffULL;
+// Resource loading (Luigi for P2). Verified in Ghidra: callers PlayerFunction::initMarioModelActor
+// (+0x190), initMarioModelActor2D (+0xc4), initCapModelActor (+0xfc) pass "ObjectData/%s" names.
+// al::findOrCreateActorResource(ActorResourceHolder*, const char* name, const char* suffix)
+constexpr ptrdiff_t al_findOrCreateActorResource = 0x9cb618;
+constexpr u64 al_findOrCreateActorResource_bytes = 0xa90157f6a9bc5ffcULL;
+// al::findOrCreateActorResourceWithAnimResource(holder, name, animArc, suffix, bool isMergeAnim)
+constexpr ptrdiff_t al_findOrCreateActorResourceWithAnimResource = 0x9cbc54;
+constexpr u64 al_findOrCreateActorResourceWithAnimResource_bytes = 0xf9009bfcd10603ffULL;
+// al::ResourceSystem::findOrCreateResource(const sead::SafeString& name, const char* ext)
+constexpr ptrdiff_t ResourceSystem_findOrCreateResource = 0xa7d894;
+constexpr u64 ResourceSystem_findOrCreateResource_bytes = 0xa9014ff4f81d0ff5ULL;
 constexpr ptrdiff_t CounterLifeCtrl_normalLayout = 0x18;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;
 constexpr u64 PlayerRecoverySafetyPoint_endRecovery_bytes = 0xa9017bfdf81e0ff3ULL;
