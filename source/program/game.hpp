@@ -6,6 +6,12 @@
 #include <cstddef>
 #include <cstdint>
 
+namespace sead {
+template <typename T>
+struct Vector3 { T x, y, z; };
+using Vector3f = Vector3<float>;
+}  // namespace sead
+
 namespace al {
 class ActorInitInfo;
 class SceneInitInfo;
@@ -13,6 +19,12 @@ class LiveActor;
 class PadRumbleKeeper;
 
 s32 getPlayerControllerPort(s32 playerIndex);          // 0x85bfec
+LiveActor* getPlayerActor(const LiveActor* actor, s32 index);     // 0x9a3f70 (hooked)
+const sead::Vector3f& getTrans(const LiveActor* actor);           // 0x8ee66c
+void calcSideDir(sead::Vector3f* out, const LiveActor* actor);    // 0x8ee6ec
+bool isOnGround(const LiveActor* actor, u32 margin);              // 0x8d8074
+void resetPosition(LiveActor* actor, const sead::Vector3f& trans);// 0x8e28b8
+void setVelocityZero(LiveActor* actor);                           // 0x8e2c68
 s32 getMainControllerPort();                           // 0x85bfb0
 PadRumbleKeeper* createPadRumbleKeeper(const LiveActor* actor, s32 port);  // 0x86b710
 }  // namespace al
@@ -57,8 +69,20 @@ namespace smo100 {
 constexpr ptrdiff_t StageScene_init = 0x4c861c;
 constexpr ptrdiff_t PlayerActorHakoniwa_initPlayer = 0x41b334;
 constexpr ptrdiff_t alPlayerFunction_registerPlayer = 0x9a4fe4;
+constexpr ptrdiff_t StageScene_control = 0x4cc348;
+constexpr ptrdiff_t al_getPlayerActor = 0x9a3f70;
+constexpr ptrdiff_t al_tryGetPlayerActor = 0x9a3fe4;
+
+// Field offsets verified in Ghidra (1.0.0):
+//  PlayerActorHakoniwa::initPlayer stores the new HackCap at this+0x148 (param_1[0x29]).
+//  HackCap::HackCap stores its owning player actor at this+0x128 (param_1[0x25]).
+constexpr ptrdiff_t PlayerActorHakoniwa_hackCap = 0x148;
+constexpr ptrdiff_t HackCap_player = 0x128;
 
 constexpr u64 StageScene_init_bytes = 0xa9016ffcfc190fe8ULL;
 constexpr u64 PlayerActorHakoniwa_initPlayer_bytes = 0xa90167faa9ba6ffcULL;
 constexpr u64 alPlayerFunction_registerPlayer_bytes = 0xa9017bfda9be4ff4ULL;
+constexpr u64 StageScene_control_bytes = 0xa9035ff8d101c3ffULL;
+constexpr u64 al_getPlayerActor_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr u64 al_tryGetPlayerActor_bytes = 0xa9017bfdf81e0ff3ULL;
 }  // namespace smo100
