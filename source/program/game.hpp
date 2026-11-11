@@ -10,6 +10,9 @@ namespace sead {
 template <typename T>
 struct Vector3 { T x, y, z; };
 using Vector3f = Vector3<float>;
+template <typename T>
+struct Vector2 { T x, y; };
+using Vector2f = Vector2<float>;
 }  // namespace sead
 
 namespace al {
@@ -30,6 +33,14 @@ class IUseAreaObj;
 class AreaObj;
 bool isInDeathArea(const IUseAreaObj* user, const sead::Vector3f& pos);  // 0x8050ec
 class IUseCollision;
+class IUseCamera;
+// 0x9d1c70: project a world position to screen pixels (Ghidra: sead::Camera::projectByMatrix with
+// the scene camera/projection/viewport, then y flipped).
+void calcScreenPosFromWorldPos(sead::Vector2f* out, const IUseCamera* user, const sead::Vector3f& pos);
+// 0x9d144c: true if -margin <= x < width+margin and -margin <= y < height+margin.
+bool isInScreen(const sead::Vector2f& pos, float margin);
+const sead::Vector3f& getCameraPos(const IUseCamera* user, s32 index);  // 0x83bbe4
+const sead::Vector3f& getCameraAt(const IUseCamera* user, s32 index);   // 0x83bc34
 class CollisionPartsFilterBase;
 class TriangleFilterBase;
 s32 getMainControllerPort();                           // 0x85bfb0
@@ -117,6 +128,7 @@ constexpr ptrdiff_t PlayerJudgeDead_player = 0x8;
 constexpr ptrdiff_t LiveActor_IUseCollision = 0x38;
 //  IUseAreaObj sits between IUseSceneObjHolder (+0x20, confirmed) and IUseCamera/IUseCollision.
 constexpr ptrdiff_t LiveActor_IUseAreaObj = 0x28;
+constexpr ptrdiff_t LiveActor_IUseCamera = 0x30;
 //  PlayerRecoverySafetyPoint's first field (+0x0) is its player actor (isValid/setSafetyPoint).
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_player = 0x0;
 

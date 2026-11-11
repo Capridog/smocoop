@@ -373,8 +373,8 @@ constexpr float kZoomStart = 500.0f;   // separation where zoom-out begins
 constexpr float kZoomFull = 2000.0f;   // separation where zoom-out is at maximum
 constexpr float kLeaderSep = 2000.0f;  // split-up distance: camera picks the leader
 constexpr float kLeaderRelease = 1500.0f;  // back together: shared view again
-constexpr float kBubbleSep = 3000.0f;  // left-behind brother is bubbled to the leader
-constexpr s32 kBubbleDelay = 30;       // frames past kBubbleSep before bubbling
+constexpr float kBubbleSep = 1500.0f;  // minimum separation for a bubble (never when close)
+constexpr s32 kBubbleDelay = 45;       // frames the brother must stay off-screen first
 constexpr s32 kBubbleCooldown = 60 * 4;
 constexpr float kZoomMax = 1.9f;       // max distance multiplier
 constexpr float kLerp = 0.08f;         // per-frame smoothing (zoom)
@@ -407,6 +407,20 @@ static float Separation(sead::Vector3f* delta) {
 static float Dist(const sead::Vector3f& a, const sead::Vector3f& b) {
     float x = a.x - b.x, y = a.y - b.y, z = a.z - b.z;
     return __builtin_sqrtf(x * x + y * y + z * z);
+}
+// Off-screen test against the real scene camera: behind the camera, or projected outside the screen.
+static bool IsOffScreen(al::LiveActor* actor) {
+    auto* camUser = reinterpret_cast<const al::IUseCamera*>(reinterpret_cast<const u8*>(actor) +
+                                                            smo100::LiveActor_IUseCamera);
+    sead::Vector3f p = al::getTrans(actor);
+    p.y += 80.0f;  // roughly the middle of the body, not the feet
+    const sead::Vector3f& cp = al::getCameraPos(camUser, 0);
+    const sead::Vector3f& ca = al::getCameraAt(camUser, 0);
+    float fx = ca.x - cp.x, fy = ca.y - cp.y, fz = ca.z - cp.z;
+    if ((p.x - cp.x) * fx + (p.y - cp.y) * fy + (p.z - cp.z) * fz <= 0.0f) return true;  // behind
+    sead::Vector2f sp;
+    al::calcScreenPosFromWorldPos(&sp, camUser, p);
+    return !al::isInScreen(sp, 0.0f);
 }
 static void Reset() {
     gZoom = 1.0f; gShare = 0.0f; gMoveP1 = gMoveP2 = 0.0f; gHavePrev = false; gLeader = -1;
@@ -442,7 +456,11 @@ static void Update() {
     for (s32 i = 0; i < 2; i++)
         if (coop::gForcedRecovery[i] > 0) coop::gForcedRecovery[i]--;
     if (gBubbleCooldown > 0) gBubbleCooldown--;
-    gFarFrames = (gLeader >= 0 && sep > kBubbleSep) ? gFarFrames + 1 : 0;
+    // only bubble the brother left behind when he is actually off-screen
+    bool behindOffScreen = false;
+    if (gLeader >= 0 && sep > kBubbleSep)
+        behindOffScreen = IsOffScreen(gLeader == 1 ? coop::gP1 : coop::gP2);
+    gFarFrames = behindOffScreen ? gFarFrames + 1 : 0;
     if (gFarFrames > kBubbleDelay && gBubbleCooldown == 0) {
         s32 behind = gLeader == 1 ? 0 : 1;
         al::LiveActor* who = behind == 0 ? coop::gP1 : coop::gP2;
