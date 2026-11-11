@@ -510,11 +510,11 @@ HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
         gSwapped = false;
         s32 p1Port = al::getPlayerControllerPort(0);
         s32 p2Port = al::getPlayerControllerPort(1);
-        if (p2Port < 0 || p2Port == p1Port) return;  // no Luigi this stage
-
         s32 n = coop::Field<s32>(state, 0x1a8);
         u8* arr = coop::Field<u8*>(state, 0x1a0);
         void* scene = coop::Field<void*>(state, 0x18);
+        COOP_LOG("Wardrobe: initModel entries=%d ports p1=%d p2=%d", n, p1Port, p2Port);
+        if (p2Port < 0 || p2Port == p1Port) return;  // no Luigi this stage
         if (n <= 0 || arr == nullptr || scene == nullptr) return;
         GameDataHolderWriter acc{nullptr};
         GameAccessorCtor(&acc, reinterpret_cast<u8*>(scene) + 0x20);
@@ -570,15 +570,37 @@ HOOK_DEFINE_TRAMPOLINE(ClosetReceiveMsgHook) {
         if (coop::Field<u8>(self, smo100::Closet_isPlayerStart) != 0)
             return false;  // after an outfit change the booth belongs to P1
         if (coop::gClosetP2 == false && coop::gP2Port < 0) return false;
-        bool prev = coop::gUiPortP2;
+        // Ghidra: rs::checkTriggerDecideWithRequestIcon -> rs::isPlayerEnableTalkGround(closet)
+        // -> al::getPlayerActor(closet, 0), and the balloon request compares rs::getPlayerPos.
+        // Answer P2 there (gToucherIsP2), so Luigi's prompt doesn't depend on where Mario is.
+        bool prev = coop::gUiPortP2, prevT = coop::gToucherIsP2;
         coop::gUiPortP2 = true;
+        coop::gToucherIsP2 = true;
         bool r = Orig(self, msg, other, own);
         coop::gUiPortP2 = prev;
+        coop::gToucherIsP2 = prevT;
         if (r && al::isMsgBindInit(msg)) {
             coop::gClosetP2 = true;
             coop::closet::SetLuigiPreview(true);
             COOP_LOG("Wardrobe: P2 session started");
         }
+        return r;
+    }
+};
+
+// Closet::attackSensor(own, other) 0x24eaac shows the "A" balloon when a player sensor touches
+// it, using player 0's talk-ground state. For P2's sensor, ask about P2 and P2's controller.
+HOOK_DEFINE_TRAMPOLINE(ClosetAttackSensorHook) {
+    static bool Callback(al::LiveActor* self, al::HitSensor* own, al::HitSensor* other) {
+        if (coop::gP2 == nullptr || other == nullptr || al::getSensorHost(other) != coop::gP2)
+            return Orig(self, own, other);
+        if (coop::Field<u8>(self, smo100::Closet_isPlayerStart) != 0) return false;
+        bool prev = coop::gUiPortP2, prevT = coop::gToucherIsP2;
+        coop::gUiPortP2 = true;
+        coop::gToucherIsP2 = true;
+        bool r = Orig(self, own, other);
+        coop::gUiPortP2 = prev;
+        coop::gToucherIsP2 = prevT;
         return r;
     }
 };
@@ -1661,7 +1683,8 @@ extern "C" void exl_main(void* x0, void* x1) {
                          ResourceSystem_findResourceCategory_bytes) &&
               CheckBytes(ResourceSystem_createResource, ResourceSystem_createResource_bytes) &&
               CheckBytes(rs_tryChangeNextStage, rs_tryChangeNextStage_bytes) &&
-              CheckBytes(StageSceneStateCloset_initModel, StageSceneStateCloset_initModel_bytes);
+              CheckBytes(StageSceneStateCloset_initModel, StageSceneStateCloset_initModel_bytes) &&
+              CheckBytes(Closet_attackSensor, Closet_attackSensor_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1709,6 +1732,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     CreateResourceHook::InstallAtOffset(ResourceSystem_createResource);
     TryChangeNextStageHook::InstallAtOffset(rs_tryChangeNextStage);
     ClosetInitModelHook::InstallAtOffset(StageSceneStateCloset_initModel);
+    ClosetAttackSensorHook::InstallAtOffset(Closet_attackSensor);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

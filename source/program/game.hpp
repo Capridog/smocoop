@@ -270,6 +270,8 @@ constexpr ptrdiff_t GOT_SafeStringBase_vtable = 0x1e4ebb8;
 // Closet::receiveMsg(const al::SensorMsg*, al::HitSensor* other, al::HitSensor* self)
 constexpr ptrdiff_t Closet_receiveMsg = 0x24e8f0;
 constexpr u64 Closet_receiveMsg_bytes = 0xa90157f6fc1c0fe8ULL;
+constexpr ptrdiff_t Closet_attackSensor = 0x24eaac;  // (HitSensor* own, HitSensor* other)
+constexpr u64 Closet_attackSensor_bytes = 0xa9017bfda9be4ff4ULL;
 constexpr ptrdiff_t Closet_isPlayerStart = 0x118;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
