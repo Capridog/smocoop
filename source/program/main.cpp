@@ -352,6 +352,46 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
     }
 };
 
+// Faster co-op bubble: the game's rescue bubble rises for 45 frames and then flies 60-120 frames.
+// For bubbles started by the co-op camera rule, rise for 12 frames and fly in 20-40 frames.
+static s32 CoopBubbleIndexOfState(const void* state) {
+    auto* actor = coop::Field<al::LiveActor*>(state, smo100::ActorStateBase_actor);
+    for (s32 i = 0; i < 2; i++) {
+        al::LiveActor* p = i == 0 ? coop::gP1 : coop::gP2;
+        if (p != nullptr && actor == p && coop::gForcedRecovery[i] > 0) return i;
+    }
+    return -1;
+}
+
+HOOK_DEFINE_TRAMPOLINE(RecoveryStartHook) {
+    static void Callback(void* state) {
+        Orig(state);
+        if (CoopBubbleIndexOfState(state) < 0) return;
+        auto* nerveUser = reinterpret_cast<al::IUseNerve*>(state);
+        if (al::getNerveStep(nerveUser) >= 12) {
+            auto* nrv = reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() +
+                                                           smo100::NrvRecoveryDeadRecovery);
+            al::setNerve(nerveUser, nrv);
+        }
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
+    static void Callback(void* state) {
+        auto* nerveUser = reinterpret_cast<al::IUseNerve*>(state);
+        bool first = al::isFirstStep(nerveUser);
+        Orig(state);
+        if (!first || CoopBubbleIndexOfState(state) < 0) return;
+        s32 fly = coop::Field<s32>(state, smo100::RecoveryDead_flightFrames) / 3;
+        if (fly < 20) fly = 20;
+        if (fly > 40) fly = 40;
+        s32 spin = coop::Field<s32>(state, smo100::RecoveryDead_spinFrames) / 3;
+        if (spin < 1) spin = 1;
+        coop::SetField<s32>(state, smo100::RecoveryDead_flightFrames, fly);
+        coop::SetField<s32>(state, smo100::RecoveryDead_spinFrames, spin);
+    }
+};
+
 // Moe-Eye: hidden platforms ask "is player 0 wearing the glasses?" (verified in Ghidra:
 // rs::isPlayerEnableToSeeOddSpace -> getPlayerActor(x,0) -> current hack == Megane). Show them when
 // either player is.
@@ -573,7 +613,9 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(PlayerCameraTarget_calcTrans, PlayerCameraTarget_calcTrans_bytes) &&
               CheckBytes(CameraPoser_makeLookAtCamera, CameraPoser_makeLookAtCamera_bytes) &&
               CheckBytes(PlayerRecoveryStart, PlayerRecoveryStart_bytes) &&
-              CheckBytes(PlayerActorHakoniwa_checkDeathArea, PlayerActorHakoniwa_checkDeathArea_bytes);
+              CheckBytes(PlayerActorHakoniwa_checkDeathArea, PlayerActorHakoniwa_checkDeathArea_bytes) &&
+              CheckBytes(PlayerStateRecoveryDead_exeStart, PlayerStateRecoveryDead_exeStart_bytes) &&
+              CheckBytes(PlayerStateRecoveryDead_exeRecovery, PlayerStateRecoveryDead_exeRecovery_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -595,6 +637,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     CameraTargetHook::InstallAtOffset(PlayerCameraTarget_calcTrans);
     MakeLookAtHook::InstallAtOffset(CameraPoser_makeLookAtCamera);
     CheckDeathAreaHook::InstallAtOffset(PlayerActorHakoniwa_checkDeathArea);
+    RecoveryStartHook::InstallAtOffset(PlayerStateRecoveryDead_exeStart);
+    RecoveryFlyHook::InstallAtOffset(PlayerStateRecoveryDead_exeRecovery);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

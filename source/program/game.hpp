@@ -33,6 +33,11 @@ class IUseAreaObj;
 class AreaObj;
 bool isInDeathArea(const IUseAreaObj* user, const sead::Vector3f& pos);  // 0x8050ec
 class IUseCollision;
+class IUseNerve;
+class Nerve;
+void setNerve(IUseNerve* user, const Nerve* nerve);  // 0x959af4
+s32 getNerveStep(const IUseNerve* user);             // 0x959c8c
+bool isFirstStep(const IUseNerve* user);             // 0x959cc8
 class IUseCamera;
 // 0x9d1c70: project a world position to screen pixels (Ghidra: sead::Camera::projectByMatrix with
 // the scene camera/projection/viewport, then y flipped).
@@ -150,6 +155,21 @@ constexpr ptrdiff_t LookAtCamera_at = 0x44;
 constexpr ptrdiff_t PlayerRecoveryStart = 0x4273f4;
 constexpr u64 PlayerRecoveryStart_bytes = 0xa90157f6a9bc5ff8ULL;
 constexpr ptrdiff_t PlayerActorHakoniwa_safetyPoint = 0x270;
+
+// Bubble flight (PlayerStateRecoveryDead, verified in Ghidra):
+//  exeStart rises for 45 steps (isLessStep 0x2d) then setNerve(Recovery = main+0x1d7eff8,
+//  whose execute() tail-calls exeRecovery). exeRecovery on its first step stores the flight
+//  length in frames at +0x74 = clamp(ceil(dist/7.5), 60, 120) and the spin length at +0x78;
+//  the path is evaluated from calcNerveRate(step, +0x74), so shortening +0x74 just flies faster.
+//  The state's actor is at +0x18 (ActorStateBase).
+constexpr ptrdiff_t PlayerStateRecoveryDead_exeStart = 0x479694;
+constexpr u64 PlayerStateRecoveryDead_exeStart_bytes = 0xfd000be8d10103ffULL;
+constexpr ptrdiff_t PlayerStateRecoveryDead_exeRecovery = 0x479884;
+constexpr u64 PlayerStateRecoveryDead_exeRecovery_bytes = 0xfd002becd10303ffULL;
+constexpr ptrdiff_t NrvRecoveryDeadRecovery = 0x1d7eff8;
+constexpr ptrdiff_t ActorStateBase_actor = 0x18;
+constexpr ptrdiff_t RecoveryDead_flightFrames = 0x74;
+constexpr ptrdiff_t RecoveryDead_spinFrames = 0x78;
 
 constexpr ptrdiff_t PlayerFunction_isPlayerHitPointOne = 0x447bdc;
 constexpr u64 PlayerFunction_isPlayerHitPointOne_bytes = 0xa9017bfdd10083ffULL;
