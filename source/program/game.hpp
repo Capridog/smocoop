@@ -13,6 +13,7 @@ using Vector3f = Vector3<float>;
 template <typename T>
 struct Vector2 { T x, y; };
 using Vector2f = Vector2<float>;
+class Heap;
 }  // namespace sead
 
 namespace al {
@@ -45,6 +46,9 @@ void setPaneStringFormat(IUseLayout* user, const char* pane, const char* fmt, ..
 class IUseCollision;
 class HitSensor;
 LiveActor* getSensorHost(const HitSensor* sensor);  // 0x8f1ec0
+class SensorMsg;
+bool isMsgBindInit(const SensorMsg* msg);          // 0x8f96e4
+sead::Heap* getSceneHeap();                        // 0x936e78
 class IUseNerve;
 class Nerve;
 void setNerve(IUseNerve* user, const Nerve* nerve);  // 0x959af4
@@ -257,6 +261,23 @@ constexpr ptrdiff_t GOT_SafeStringBase_vtable = 0x1e4ebb8;
 // Closet::receiveMsg(const al::SensorMsg*, al::HitSensor* other, al::HitSensor* self)
 constexpr ptrdiff_t Closet_receiveMsg = 0x24e8f0;
 constexpr u64 Closet_receiveMsg_bytes = 0xa90157f6fc1c0fe8ULL;
+constexpr ptrdiff_t Closet_isPlayerStart = 0x118;  // bool, set in Closet::init (isPlayerStartCloset)
+// al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
+constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
+constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;
+// StageSceneStateCloset::kill() (vtable +0x28, called at the end of exeEnd)
+constexpr ptrdiff_t StageSceneStateCloset_kill = 0x4d5758;
+constexpr u64 StageSceneStateCloset_kill_bytes = 0xa9017bfdf81e0ff3ULL;
+// GameDataFunction::wearCostume/wearCap(GameDataHolderWriter, const char*) -> bool
+constexpr ptrdiff_t GameDataFunction_wearCostume = 0x52b4ec;
+constexpr u64 GameDataFunction_wearCostume_bytes = 0xa9017bfda9be4ff4ULL;
+constexpr ptrdiff_t GameDataFunction_wearCap = 0x52b530;
+constexpr u64 GameDataFunction_wearCap_bytes = 0xa9017bfda9be4ff4ULL;
+// GameDataFunction::getCurrentCostumeTypeName/getCurrentCapTypeName(GameDataHolderAccessor)
+constexpr ptrdiff_t GameDataFunction_getCurrentCostumeTypeName = 0x52b48c;
+constexpr u64 GameDataFunction_getCurrentCostumeTypeName_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr ptrdiff_t GameDataFunction_getCurrentCapTypeName = 0x52b4bc;
+constexpr u64 GameDataFunction_getCurrentCapTypeName_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr u64 al_findResource_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t CounterLifeCtrl_normalLayout = 0x18;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;

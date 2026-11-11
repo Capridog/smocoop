@@ -32,6 +32,12 @@ static bool gGameOver = false;      // both brothers down: real death in progres
 static bool gForceP1Death = false;  // send P1 into the vanilla death sequence next frame
 static bool gToucherIsP2 = false;   // a pipe is processing P2's touch right now
 
+// Wardrobe for P2. P2's outfit lives here (not in the save file); empty = same as P1.
+static char gP2Costume[64] = {};
+static char gP2CapName[64] = {};
+static bool gClosetP2 = false;   // P2 is using the wardrobe right now (Closet bind -> state kill)
+static bool gUiPortP2 = false;   // al::getMainControllerPort answers P2's port
+
 template <typename T>
 static T Field(const void* base, ptrdiff_t off) {
     T v;
@@ -200,6 +206,8 @@ static void Reset();
 HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
     static void Callback(StageScene* scene, const al::SceneInitInfo& info) {
         coop::ResetStageState();
+        coop::gClosetP2 = false;
+        coop::gUiPortP2 = false;
         coop::cam::Reset();
         coop::echo::Reset();
         coop::hud::Reset();
@@ -212,6 +220,12 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
         }
         COOP_LOG("StageScene::init done. P1=%p P2=%p P2port=%d", coop::gP1, coop::gP2,
                  coop::gP2Port);
+        if (sead::Heap* heap = al::getSceneHeap()) {
+            // sead::Heap vtable slot 15 = getFreeSize (ExpHeap vtable 0x1dcbc68, Ghidra).
+            using FreeFn = size_t (*)(sead::Heap*);
+            FreeFn fn = (*reinterpret_cast<FreeFn**>(heap))[15];
+            COOP_LOG("Scene heap free: %lu KB", (unsigned long)(fn(heap) / 1024));
+        }
     }
 };
 
@@ -342,17 +356,102 @@ HOOK_DEFINE_TRAMPOLINE(FindResourceHook) {
 };
 
 // ------------------------------------------------------------------------ wardrobe (closet)
-// After an outfit change the stage restarts with Closet in "player start" mode (+0x118): its
-// sensor follows player 0 and binds the first player sensor that sends BindStart/BindInit,
-// storing the puppet at +0x110 (Ghidra: Closet::receiveMsg 0x24e8f0, exeWearEnd 0x24e830).
-// P2's sensor also answered, overwrote +0x110 with P2's puppet, and Mario's bind never ended.
-// The wardrobe belongs to P1: Closet ignores every message from P2's sensors.
+// Ghidra (1.0.0): Closet::receiveMsg 0x24e8f0. Normal mode: a player sensor's BindStart opens the
+// wardrobe when rs::checkTriggerDecideWithRequestIcon sees "decide" (rs::isTriggerUiDecide ->
+// al::getMainControllerPort); BindInit then puppets *that* player. "Player start" mode (+0x118,
+// right after an outfit change) binds whoever answers first and keeps one puppet at +0x110.
+//  - start mode: only P1 may answer (P2 overwrote +0x110 and Mario stayed bound).
+//  - normal mode, message from P2: the decide check reads P2's controller, and a BindInit from
+//    P2 starts a P2 wardrobe session (UI on P2's controller, outfit stored for P2 only).
+namespace coop::closet {
+constexpr uintptr_t kStateBegin = 0x4d42b8;  // StageSceneStateCloset::tryCreate
+constexpr uintptr_t kStateEnd = 0x4d7cf8;    // end of StageSceneStateCloset::~StageSceneStateCloset
+static bool CalledFromClosetState(void* ret) {
+    uintptr_t off = reinterpret_cast<uintptr_t>(ret) - exl::util::modules::GetTargetStart();
+    return off >= kStateBegin && off < kStateEnd;
+}
+}  // namespace coop::closet
+
 HOOK_DEFINE_TRAMPOLINE(ClosetReceiveMsgHook) {
-    static bool Callback(al::LiveActor* self, const void* msg, al::HitSensor* other,
+    static bool Callback(al::LiveActor* self, const al::SensorMsg* msg, al::HitSensor* other,
                          al::HitSensor* own) {
-        if (coop::gP2 != nullptr && other != nullptr && al::getSensorHost(other) == coop::gP2)
-            return false;
-        return Orig(self, msg, other, own);
+        if (coop::gP2 == nullptr || other == nullptr || al::getSensorHost(other) != coop::gP2)
+            return Orig(self, msg, other, own);
+        if (coop::Field<u8>(self, smo100::Closet_isPlayerStart) != 0)
+            return false;  // after an outfit change the booth belongs to P1
+        if (coop::gClosetP2 == false && coop::gP2Port < 0) return false;
+        bool prev = coop::gUiPortP2;
+        coop::gUiPortP2 = true;
+        bool r = Orig(self, msg, other, own);
+        coop::gUiPortP2 = prev;
+        if (r && al::isMsgBindInit(msg)) {
+            coop::gClosetP2 = true;
+            COOP_LOG("Wardrobe: P2 session started");
+        }
+        return r;
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
+    static s32 Callback() {
+        if ((coop::gUiPortP2 || coop::gClosetP2) && coop::gP2Port >= 0) return coop::gP2Port;
+        return Orig();
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(ClosetStateKillHook) {
+    static void Callback(void* state) {
+        Orig(state);
+        if (coop::gClosetP2) COOP_LOG("Wardrobe: P2 session ended");
+        coop::gClosetP2 = false;
+    }
+};
+
+static void CopyName(char* dst, const char* src) {
+    size_t n = src ? std::strlen(src) : 0;
+    if (n > 63) n = 63;
+    if (n) std::memcpy(dst, src, n);
+    dst[n] = 0;
+}
+
+HOOK_DEFINE_TRAMPOLINE(WearCostumeHook) {
+    static bool Callback(void* writer, const char* name) {
+        if (coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0))) {
+            CopyName(coop::gP2Costume, name);
+            COOP_LOG("Wardrobe: P2 body -> %s (save file untouched)", coop::gP2Costume);
+            return true;
+        }
+        return Orig(writer, name);
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(WearCapHook) {
+    static bool Callback(void* writer, const char* name) {
+        if (coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0))) {
+            CopyName(coop::gP2CapName, name);
+            COOP_LOG("Wardrobe: P2 cap -> %s (save file untouched)", coop::gP2CapName);
+            return true;
+        }
+        return Orig(writer, name);
+    }
+};
+
+// While P2 browses, the wardrobe marks P2's current outfit as "worn".
+HOOK_DEFINE_TRAMPOLINE(GetCostumeNameHook) {
+    static const char* Callback(void* accessor) {
+        if (coop::gClosetP2 && coop::gP2Costume[0] &&
+            coop::closet::CalledFromClosetState(__builtin_return_address(0)))
+            return coop::gP2Costume;
+        return Orig(accessor);
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(GetCapNameHook) {
+    static const char* Callback(void* accessor) {
+        if (coop::gClosetP2 && coop::gP2CapName[0] &&
+            coop::closet::CalledFromClosetState(__builtin_return_address(0)))
+            return coop::gP2CapName;
+        return Orig(accessor);
     }
 };
 
@@ -378,6 +477,10 @@ HOOK_DEFINE_TRAMPOLINE(PlayerInitHook) {
         PlayerInitInfo p2Info;
         std::memcpy(&p2Info, &playerInfo, sizeof(p2Info));
         p2Info.controllerPort = p2Port;
+        if (coop::gP2Costume[0]) p2Info.costumeName = coop::gP2Costume;
+        if (coop::gP2CapName[0]) p2Info.capName = coop::gP2CapName;
+        COOP_LOG("P2 outfit: body %s, cap %s", p2Info.costumeName ? p2Info.costumeName : "-",
+                 p2Info.capName ? p2Info.capName : "-");
         p2Info.trans[0] += 150.0f;  // initial offset; final placement happens in StageSceneControl
 
         PlayerActorBase* p2 = createPlayerFunction<PlayerActorHakoniwa>("Player2");
@@ -1352,7 +1455,15 @@ extern "C" void exl_main(void* x0, void* x1) {
                          al_findOrCreateActorResourceWithAnimResource_bytes) &&
               CheckBytes(ResourceSystem_findOrCreateResource, ResourceSystem_findOrCreateResource_bytes) &&
               CheckBytes(al_findResource, al_findResource_bytes) &&
-              CheckBytes(Closet_receiveMsg, Closet_receiveMsg_bytes);
+              CheckBytes(Closet_receiveMsg, Closet_receiveMsg_bytes) &&
+              CheckBytes(al_getMainControllerPort, al_getMainControllerPort_bytes) &&
+              CheckBytes(StageSceneStateCloset_kill, StageSceneStateCloset_kill_bytes) &&
+              CheckBytes(GameDataFunction_wearCostume, GameDataFunction_wearCostume_bytes) &&
+              CheckBytes(GameDataFunction_wearCap, GameDataFunction_wearCap_bytes) &&
+              CheckBytes(GameDataFunction_getCurrentCostumeTypeName,
+                         GameDataFunction_getCurrentCostumeTypeName_bytes) &&
+              CheckBytes(GameDataFunction_getCurrentCapTypeName,
+                         GameDataFunction_getCurrentCapTypeName_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1389,6 +1500,12 @@ extern "C" void exl_main(void* x0, void* x1) {
     ResourceFindOrCreateHook::InstallAtOffset(ResourceSystem_findOrCreateResource);
     FindResourceHook::InstallAtOffset(al_findResource);
     ClosetReceiveMsgHook::InstallAtOffset(Closet_receiveMsg);
+    MainControllerPortHook::InstallAtOffset(al_getMainControllerPort);
+    ClosetStateKillHook::InstallAtOffset(StageSceneStateCloset_kill);
+    WearCostumeHook::InstallAtOffset(GameDataFunction_wearCostume);
+    WearCapHook::InstallAtOffset(GameDataFunction_wearCap);
+    GetCostumeNameHook::InstallAtOffset(GameDataFunction_getCurrentCostumeTypeName);
+    GetCapNameHook::InstallAtOffset(GameDataFunction_getCurrentCapTypeName);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
