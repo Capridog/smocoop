@@ -26,6 +26,9 @@ void resetPosition(LiveActor* actor, const sead::Vector3f& trans);// 0x8e28b8
 void setVelocityZero(LiveActor* actor);                           // 0x8e2c68
 bool isDead(const LiveActor* actor);                              // 0x8d9980
 bool isInDeathArea(const LiveActor* actor);                       // 0x8d6bb8
+class IUseAreaObj;
+class AreaObj;
+bool isInDeathArea(const IUseAreaObj* user, const sead::Vector3f& pos);  // 0x8050ec
 class IUseCollision;
 class CollisionPartsFilterBase;
 class TriangleFilterBase;
@@ -52,6 +55,11 @@ void registerPlayer(al::LiveActor* actor, al::PadRumbleKeeper* keeper);  // 0x9a
 }
 
 class PlayerActorBase;
+class PlayerRecoverySafetyPoint {
+public:
+    // 0x460508. Vanilla PlayerActorHakoniwa::movement calls it with (trans, -gravity, nullptr).
+    void setSafetyPoint(const sead::Vector3f& pos, const sead::Vector3f& up, const al::AreaObj* area);
+};
 class PlayerActorHakoniwa;
 class StageScene;
 
@@ -107,6 +115,17 @@ constexpr ptrdiff_t PlayerHackKeeper_hackActor = 0x68;
 constexpr ptrdiff_t PlayerActorHakoniwa_damageKeeper = 0x198;
 constexpr ptrdiff_t PlayerJudgeDead_player = 0x8;
 constexpr ptrdiff_t LiveActor_IUseCollision = 0x38;
+//  IUseAreaObj sits between IUseSceneObjHolder (+0x20, confirmed) and IUseCamera/IUseCollision.
+constexpr ptrdiff_t LiveActor_IUseAreaObj = 0x28;
+//  PlayerRecoverySafetyPoint's first field (+0x0) is its player actor (isValid/setSafetyPoint).
+constexpr ptrdiff_t PlayerRecoverySafetyPoint_player = 0x0;
+
+constexpr ptrdiff_t PlayerFunction_isPlayerHitPointOne = 0x447bdc;
+constexpr u64 PlayerFunction_isPlayerHitPointOne_bytes = 0xa9017bfdd10083ffULL;
+constexpr ptrdiff_t PlayerRecoverySafetyPoint_isValid = 0x460c90;
+constexpr u64 PlayerRecoverySafetyPoint_isValid_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr ptrdiff_t rs_isPlayerEnableToSeeOddSpace = 0x570908;
+constexpr u64 rs_isPlayerEnableToSeeOddSpace_bytes = 0xa9017bfdf81e0ff3ULL;
 
 constexpr ptrdiff_t PlayerJudgeDead_judge = 0x458e14;
 constexpr ptrdiff_t PlayerDamageKeeper_damage = 0x43f154;

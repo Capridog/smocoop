@@ -62,6 +62,11 @@ static bool RayHit(const al::LiveActor* user, const sead::Vector3f& from, const 
     return alCollisionUtil::getHitPosOnArrow(col, hit, from, arrow, nullptr, nullptr);
 }
 
+static const al::IUseAreaObj* P1AreaUser() {
+    return reinterpret_cast<const al::IUseAreaObj*>(reinterpret_cast<const u8*>(gP1) +
+                                                    smo100::LiveActor_IUseAreaObj);
+}
+
 // Find a safe spot beside P1: right, left, behind, front; each must have no wall between P1 and the
 // spot and must have ground within 600 units below it. Falls back to P1's own position.
 static sead::Vector3f FindSpotBesideP1() {
@@ -82,7 +87,9 @@ static sead::Vector3f FindSpotBesideP1() {
         sead::Vector3f down = {0.0f, -600.0f, 0.0f};
         sead::Vector3f ground;
         if (!RayHit(gP1, top, down, &ground)) continue;  // no floor (ledge / pit)
-        return {ground.x, ground.y + 5.0f, ground.z};
+        sead::Vector3f spot = {ground.x, ground.y + 5.0f, ground.z};
+        if (al::isInDeathArea(P1AreaUser(), spot)) continue;  // floor is inside a pit/kill volume
+        return spot;
     }
     return {p1.x, p1.y + 5.0f, p1.z};
 }
@@ -199,7 +206,7 @@ static bool IsP2Keeper(void* keeper) {
            coop::Field<al::LiveActor*>(keeper, 0x0) == coop::gP2;
 }
 
-static void P2TakeHit(void* keeper, s32 damageType) {
+static void P2TakeHit(void* keeper, s32 damageType, bool fromRecovery) {
     coop::SetField<u8>(keeper, 0x10, 1);
     coop::SetField<s32>(keeper, 0x14, damageType);
     coop::gP2Hp = coop::gP2Hp > 0 ? coop::gP2Hp - 1 : 0;
@@ -207,7 +214,15 @@ static void P2TakeHit(void* keeper, s32 damageType) {
     coop::SetField<s32>(keeper, 0x28, 0);
     if (coop::Field<s32>(keeper, 0x2c) < 0x78) coop::SetField<s32>(keeper, 0x2c, 0);
     COOP_LOG("P2 hit, HP now %d", coop::gP2Hp);
-    if (coop::gP2Hp <= 0) coop::gP2RespawnPending = true;
+    if (coop::gP2Hp <= 0) {
+        if (fromRecovery) {
+            // pit/quicksand recovery already moves P2 beside P1 (safety point); just refill
+            coop::gP2Hp = coop::kP2MaxHp;
+            COOP_LOG("P2 out of hearts during recovery; refilled to %d", coop::gP2Hp);
+        } else {
+            coop::gP2RespawnPending = true;  // refill + move beside P1 next frame
+        }
+    }
 }
 
 HOOK_DEFINE_TRAMPOLINE(DamageHook) {
@@ -215,7 +230,7 @@ HOOK_DEFINE_TRAMPOLINE(DamageHook) {
         if (!IsP2Keeper(keeper)) return Orig(keeper, damageType);
         // vanilla skips the life change while +0x1c (prevent-damage) is set
         if (coop::Field<u8>(keeper, 0x1c) == 0) {
-            P2TakeHit(keeper, damageType);
+            P2TakeHit(keeper, damageType, false);
         } else {
             coop::SetField<u8>(keeper, 0x10, 1);
             coop::SetField<s32>(keeper, 0x14, damageType);
@@ -226,7 +241,8 @@ HOOK_DEFINE_TRAMPOLINE(DamageHook) {
 HOOK_DEFINE_TRAMPOLINE(DamageForceHook) {
     static void Callback(void* keeper, s32 damageType) {
         if (!IsP2Keeper(keeper)) return Orig(keeper, damageType);
-        P2TakeHit(keeper, damageType);
+        // vanilla only uses damageForce for the pit/quicksand "lose a heart and recover" path
+        P2TakeHit(keeper, damageType, true);
     }
 };
 
@@ -247,18 +263,37 @@ HOOK_DEFINE_TRAMPOLINE(JudgeDeadHook) {
     }
 };
 
-// Pits / death areas: P2 is put back beside P1 and loses one heart instead of entering the
-// vanilla fall-death sequence (which ends the stage for everyone).
-HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
-    static bool Callback(PlayerActorHakoniwa* self) {
-        auto* actor = reinterpret_cast<al::LiveActor*>(self);
-        if (coop::gP2 == nullptr || actor != coop::gP2 || coop::gP1 == nullptr ||
-            !al::isInDeathArea(actor))
-            return Orig(self);
-        coop::gP2Hp = coop::gP2Hp > 1 ? coop::gP2Hp - 1 : coop::kP2MaxHp;
-        coop::PlaceP2BesideP1("fell into a death area");
-        COOP_LOG("P2 HP now %d", coop::gP2Hp);
+// Pits, quicksand, lava: vanilla already has a "lose a heart and get put back at the safety point"
+// path (checkDeathArea / executePreMovementNerveChange -> damageForce + recovery via
+// PlayerStateAbyss). It is only taken when PlayerRecoverySafetyPoint::isValid() is true and the
+// SHARED life counter is not 1 (PlayerFunction::isPlayerHitPointOne). For P2 we force that path
+// and move P2's safety point beside P1, so P2 is recovered next to Mario with the game's own
+// animation instead of dying.
+HOOK_DEFINE_TRAMPOLINE(HitPointOneHook) {
+    static bool Callback(const al::LiveActor* actor) {
+        if (coop::gP2 != nullptr && actor == coop::gP2) return false;
+        return Orig(actor);
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(SafetyPointValidHook) {
+    static bool Callback(PlayerRecoverySafetyPoint* sp) {
+        auto* owner = coop::Field<al::LiveActor*>(sp, smo100::PlayerRecoverySafetyPoint_player);
+        if (coop::gP2 == nullptr || coop::gP1 == nullptr || owner != coop::gP2) return Orig(sp);
+        sead::Vector3f spot = coop::FindSpotBesideP1();
+        sead::Vector3f up = {0.0f, 1.0f, 0.0f};
+        sp->setSafetyPoint(spot, up, nullptr);
         return true;
+    }
+};
+
+// Moe-Eye: hidden platforms ask "is player 0 wearing the glasses?" (verified in Ghidra:
+// rs::isPlayerEnableToSeeOddSpace -> getPlayerActor(x,0) -> current hack == Megane). Show them when
+// either player is.
+HOOK_DEFINE_TRAMPOLINE(SeeOddSpaceHook) {
+    static bool Callback(const al::LiveActor* actor) {
+        if (Orig(actor)) return true;
+        return coop::gP2 != nullptr && Orig(coop::gP2);
     }
 };
 
@@ -309,8 +344,9 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(PlayerDamageKeeper_damage, PlayerDamageKeeper_damage_bytes) &&
               CheckBytes(PlayerDamageKeeper_damageForce, PlayerDamageKeeper_damageForce_bytes) &&
               CheckBytes(PlayerDamageKeeper_dead, PlayerDamageKeeper_dead_bytes) &&
-              CheckBytes(PlayerActorHakoniwa_checkDeathArea,
-                         PlayerActorHakoniwa_checkDeathArea_bytes);
+              CheckBytes(PlayerFunction_isPlayerHitPointOne, PlayerFunction_isPlayerHitPointOne_bytes) &&
+              CheckBytes(PlayerRecoverySafetyPoint_isValid, PlayerRecoverySafetyPoint_isValid_bytes) &&
+              CheckBytes(rs_isPlayerEnableToSeeOddSpace, rs_isPlayerEnableToSeeOddSpace_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -326,8 +362,10 @@ extern "C" void exl_main(void* x0, void* x1) {
     DamageHook::InstallAtOffset(PlayerDamageKeeper_damage);
     DamageForceHook::InstallAtOffset(PlayerDamageKeeper_damageForce);
     DeadHook::InstallAtOffset(PlayerDamageKeeper_dead);
-    CheckDeathAreaHook::InstallAtOffset(PlayerActorHakoniwa_checkDeathArea);
-    COOP_LOG("Hooks installed (SMO 1.0.0, step 3).");
+    HitPointOneHook::InstallAtOffset(PlayerFunction_isPlayerHitPointOne);
+    SafetyPointValidHook::InstallAtOffset(PlayerRecoverySafetyPoint_isValid);
+    SeeOddSpaceHook::InstallAtOffset(rs_isPlayerEnableToSeeOddSpace);
+    COOP_LOG("Hooks installed (SMO 1.0.0, step 3b).");
 }
 
 extern "C" NORETURN void exl_exception_entry() {
