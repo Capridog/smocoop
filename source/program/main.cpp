@@ -27,6 +27,8 @@ static s32 gFramesSinceInit = 0;
 constexpr s32 kP2MaxHp = 3;
 static s32 gP2Hp = kP2MaxHp;
 static bool gP2RespawnPending = false;
+static bool gGameOver = false;      // both brothers down: real death in progress
+static bool gForceP1Death = false;  // send P1 into the vanilla death sequence next frame
 
 template <typename T>
 static T Field(const void* base, ptrdiff_t off) {
@@ -46,6 +48,8 @@ static void ResetStageState() {
     gFramesSinceInit = 0;
     gP2Hp = kP2MaxHp;
     gP2RespawnPending = false;
+    gGameOver = false;
+    gForceP1Death = false;
 }
 
 // Actor P2 is currently capturing (nullptr if none).
@@ -124,8 +128,39 @@ static void StartBubbleTo(al::LiveActor* who, al::LiveActor* to, s32 whoIdx) {
     gBubbleBusy[whoIdx] = 60 * 10;  // cleared (to a 1 s grace) when the bubble lands
     fn(who, Field<void*>(who, 0x148), Field<void*>(who, 0x1f8), Field<void*>(who, 0x1f0),
        Field<void*>(who, 0x200), Field<void*>(who, 0x3b8));
-    COOP_LOG("Bubble: P%d left behind, floating to P%d at (%.0f, %.0f, %.0f)", whoIdx + 1,
+    COOP_LOG("Bubble: P%d floating to P%d at (%.0f, %.0f, %.0f)", whoIdx + 1,
              2 - whoIdx, spot.x, spot.y, spot.z);
+}
+
+// ---- 3D World death rules ----
+// A brother who would die goes into a bubble to the other one, as long as the other one is
+// available (alive and not in a bubble himself). If the other one is already in a bubble, it's a
+// real death: Mario goes through the game's own fall-death sequence (black screen, coins lost,
+// restart), which is what the stage reacts to.
+static al::LiveActor* PlayerAt(s32 i) { return i == 0 ? gP1 : gP2; }
+static bool PartnerAvailable(s32 i) {
+    al::LiveActor* other = PlayerAt(1 - i);
+    if (other == nullptr || PlayerAt(i) == nullptr || gGameOver) return false;
+    return !al::isDead(other) && gBubbleBusy[1 - i] <= 60;  // >60 = bubble in flight
+}
+static void RequestBubble(s32 i, const char* why) {
+    if (gBubbleRequest[i] || gBubbleBusy[i] > 60) return;
+    gBubbleRequest[i] = true;
+    gForcedRecovery[i] = 60 * 10;
+    gBubbleBusy[i] = 60 * 10;
+    COOP_LOG("Bubble requested for P%d (%s)", i + 1, why);
+}
+static void RequestGameOver(const char* why) {
+    if (gGameOver) return;
+    gGameOver = true;
+    gForceP1Death = true;
+    COOP_LOG("Both brothers down (%s): real death", why);
+}
+static void CallRecoveryRoutine(al::LiveActor* who) {
+    using Fn = void (*)(al::LiveActor*, void*, void*, void*, void*, void*);
+    auto fn = reinterpret_cast<Fn>(exl::util::modules::GetTargetStart() + smo100::PlayerRecoveryStart);
+    fn(who, Field<void*>(who, 0x148), Field<void*>(who, 0x1f8), Field<void*>(who, 0x1f0),
+       Field<void*>(who, 0x200), Field<void*>(who, 0x3b8));
 }
 
 static void PlaceP2BesideP1(const char* why) {
@@ -260,13 +295,34 @@ static void P2TakeHit(void* keeper, s32 damageType, bool fromRecovery) {
             coop::gP2Hp = coop::kP2MaxHp;
             COOP_LOG("P2 out of hearts during recovery; refilled to %d", coop::gP2Hp);
         } else {
-            coop::gP2RespawnPending = true;  // refill + move beside P1 next frame
+            coop::gP2Hp = coop::kP2MaxHp;
+            if (coop::PartnerAvailable(1)) coop::RequestBubble(1, "out of hearts");
+            else coop::RequestGameOver("P2 out of hearts while P1 in a bubble");
         }
     }
 }
 
+static bool IsP1Keeper(void* keeper) {
+    return coop::gP1 != nullptr && coop::gP2 != nullptr && keeper != nullptr &&
+           coop::Field<al::LiveActor*>(keeper, 0x0) == coop::gP1;
+}
+static bool P1OnLastHeart();  // defined after HitPointOneHook
+
+// P1's last heart: refill and bubble to P2 instead of dying (if P2 is available).
+static bool TrySaveP1(void* keeper, s32 damageType, const char* why, bool startBubble) {
+    if (!IsP1Keeper(keeper) || !P1OnLastHeart() || !coop::PartnerAvailable(0)) return false;
+    coop::SetField<u8>(keeper, 0x10, 1);
+    coop::SetField<s32>(keeper, 0x14, damageType);
+    GameDataFunction::recoveryPlayerMax(coop::gP1);
+    if (startBubble) coop::RequestBubble(0, why);  // pits/quicksand: vanilla recovery already bubbles
+    else COOP_LOG("P1 on last heart in a pit: refilled, game's own bubble takes him to P2");
+    return true;
+}
+
 HOOK_DEFINE_TRAMPOLINE(DamageHook) {
     static void Callback(void* keeper, s32 damageType) {
+        if (coop::Field<u8>(keeper, 0x1c) == 0 && TrySaveP1(keeper, damageType, "out of hearts", true))
+            return;
         if (!IsP2Keeper(keeper)) return Orig(keeper, damageType);
         // vanilla skips the life change while +0x1c (prevent-damage) is set
         if (coop::Field<u8>(keeper, 0x1c) == 0) {
@@ -280,6 +336,7 @@ HOOK_DEFINE_TRAMPOLINE(DamageHook) {
 
 HOOK_DEFINE_TRAMPOLINE(DamageForceHook) {
     static void Callback(void* keeper, s32 damageType) {
+        if (TrySaveP1(keeper, damageType, "last heart in a pit", false)) return;
         if (!IsP2Keeper(keeper)) return Orig(keeper, damageType);
         // vanilla only uses damageForce for the pit/quicksand "lose a heart and recover" path
         P2TakeHit(keeper, damageType, true);
@@ -289,8 +346,8 @@ HOOK_DEFINE_TRAMPOLINE(DamageForceHook) {
 HOOK_DEFINE_TRAMPOLINE(DeadHook) {
     static void Callback(void* keeper) {
         if (!IsP2Keeper(keeper)) return Orig(keeper);
-        COOP_LOG("P2 would have died; respawning beside P1 instead.");
-        coop::gP2RespawnPending = true;
+        if (coop::PartnerAvailable(1)) coop::RequestBubble(1, "would have died");
+        else coop::RequestGameOver("P2 died while P1 in a bubble");
     }
 };
 
@@ -312,22 +369,26 @@ HOOK_DEFINE_TRAMPOLINE(JudgeDeadHook) {
 HOOK_DEFINE_TRAMPOLINE(HitPointOneHook) {
     static bool Callback(const al::LiveActor* actor) {
         if (coop::gP2 != nullptr && actor == coop::gP2) return false;
+        // P1 takes the "lose a heart and recover" path while P2 can catch him
+        if (coop::gP1 != nullptr && actor == coop::gP1 && coop::PartnerAvailable(0)) return false;
         return Orig(actor);
     }
 };
+static bool P1OnLastHeart() { return HitPointOneHook::Orig(coop::gP1); }
 
 HOOK_DEFINE_TRAMPOLINE(SafetyPointValidHook) {
     static bool Callback(PlayerRecoverySafetyPoint* sp) {
         auto* owner = coop::Field<al::LiveActor*>(sp, smo100::PlayerRecoverySafetyPoint_player);
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return Orig(sp);
         sead::Vector3f up = {0.0f, 1.0f, 0.0f};
+        if (coop::gGameOver) return Orig(sp);
         if (owner == coop::gP2) {
             sead::Vector3f spot = coop::FindSpotBeside(coop::gP1);
             sp->setSafetyPoint(spot, up, nullptr);
             return true;
         }
-        if (owner == coop::gP1 && coop::gForcedRecovery[0] > 0) {
-            // P1 is being bubbled to P2 by the co-op camera rule
+        if (owner == coop::gP1 && (coop::gForcedRecovery[0] > 0 || coop::PartnerAvailable(0))) {
+            // P1 is bubbled to P2 (off-screen rule, or pit/quicksand while P2 can catch him)
             sead::Vector3f spot = coop::FindSpotBeside(coop::gP2);
             sp->setSafetyPoint(spot, up, nullptr);
             return true;
@@ -343,8 +404,20 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
     static bool Callback(PlayerActorHakoniwa* self) {
         auto* actor = reinterpret_cast<al::LiveActor*>(self);
         if (coop::gP1 != nullptr && coop::gP2 != nullptr) {
+            if (actor == coop::gP1 && coop::gForceP1Death) {
+                // vanilla fall-death: life to zero + Abyss state with no valid safety point
+                coop::gForceP1Death = false;
+                coop::gForcedRecovery[0] = 0;
+                DeadHook::Orig(coop::Field<void*>(actor, smo100::PlayerActorHakoniwa_damageKeeper));
+                coop::CallRecoveryRoutine(actor);
+                COOP_LOG("P1 sent into the game's death sequence");
+                return true;
+            }
+            if (actor == coop::gP2 && !coop::gGameOver && al::isInDeathArea(actor) &&
+                !coop::PartnerAvailable(1))
+                coop::RequestGameOver("P2 fell while P1 in a bubble");
             s32 idx = actor == coop::gP1 ? 0 : (actor == coop::gP2 ? 1 : -1);
-            if (idx >= 0 && coop::gBubbleRequest[idx]) {
+            if (idx >= 0 && coop::gBubbleRequest[idx] && !coop::gGameOver) {
                 coop::gBubbleRequest[idx] = false;
                 coop::StartBubbleTo(actor, idx == 0 ? coop::gP2 : coop::gP1, idx);
                 return true;
@@ -370,6 +443,12 @@ static s32 CoopBubbleIndexOfState(const void* state) {
 
 HOOK_DEFINE_TRAMPOLINE(RecoveryStartHook) {
     static void Callback(void* state) {
+        if (al::isFirstStep(reinterpret_cast<al::IUseNerve*>(state))) {
+            auto* a = coop::Field<al::LiveActor*>(state, smo100::ActorStateBase_actor);
+            for (s32 i = 0; i < 2; i++)
+                if (a != nullptr && a == coop::PlayerAt(i) && coop::gBubbleBusy[i] < 60 * 10)
+                    coop::gBubbleBusy[i] = 60 * 10;  // any bubble (pit too) counts as "in a bubble"
+        }
         Orig(state);
         if (CoopBubbleIndexOfState(state) < 0) return;
         auto* nerveUser = reinterpret_cast<al::IUseNerve*>(state);
@@ -469,6 +548,56 @@ HOOK_DEFINE_TRAMPOLINE(EndRecoveryHook) {
                 COOP_LOG("Bubble: P%d landed", i + 1);
             }
         }
+    }
+};
+
+// Crushed: executePreMovementNerveChange kills a player when rs::isPressedCollision(player+0x170)
+// is true. If the partner can catch him, bubble out of the crush instead.
+HOOK_DEFINE_TRAMPOLINE(PressedHook) {
+    static bool Callback(const void* collision) {
+        bool pressed = Orig(collision);
+        if (!pressed || coop::gGameOver || coop::gP1 == nullptr || coop::gP2 == nullptr)
+            return pressed;
+        s32 idx = -1;
+        for (s32 i = 0; i < 2; i++)
+            if (collision == coop::Field<void*>(coop::PlayerAt(i),
+                                                smo100::PlayerActorHakoniwa_collision))
+                idx = i;
+        if (idx < 0) return pressed;
+        if (coop::PartnerAvailable(idx)) {
+            coop::RequestBubble(idx, "crushed");
+            return false;
+        }
+        if (idx == 1) {
+            coop::RequestGameOver("P2 crushed while P1 in a bubble");
+            return false;
+        }
+        return pressed;  // P1 crushed while P2 is in a bubble: vanilla death
+    }
+};
+
+// Hearts: LifeUpItem::get -> isPlayerHitPointMax / recoveryPlayer on the shared counter. When P2
+// picked it up, use P2's own hearts instead.
+static bool gPickerIsP2 = false;
+HOOK_DEFINE_TRAMPOLINE(LifeUpGetHook) {
+    static void Callback(al::LiveActor* item) {
+        auto* sensor = coop::Field<al::HitSensor*>(item, smo100::LifeUpItem_pickerSensor);
+        gPickerIsP2 = coop::gP2 != nullptr && sensor != nullptr && al::getSensorHost(sensor) == coop::gP2;
+        Orig(item);
+        gPickerIsP2 = false;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(HitPointMaxHook) {
+    static bool Callback(void* accessor) {
+        if (gPickerIsP2) return coop::gP2Hp >= coop::kP2MaxHp;
+        return Orig(accessor);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(RecoveryPlayerHook) {
+    static void Callback(const al::LiveActor* item) {
+        if (!gPickerIsP2) return Orig(item);
+        if (coop::gP2Hp < coop::kP2MaxHp) coop::gP2Hp++;
+        COOP_LOG("P2 picked up a heart, HP now %d", coop::gP2Hp);
     }
 };
 
@@ -589,7 +718,7 @@ static void Update() {
     gFarIdx = offIdx;
     for (s32 i = 0; i < 2; i++)
         if (coop::gBubbleBusy[i] > 0) coop::gBubbleBusy[i]--;
-    if (offIdx >= 0 && gFarFrames >= kBubbleDelay && gBubbleCooldown == 0 &&
+    if (!coop::gGameOver && offIdx >= 0 && gFarFrames >= kBubbleDelay && gBubbleCooldown == 0 &&
         !coop::gBubbleRequest[offIdx] && coop::gBubbleBusy[offIdx] == 0) {
         al::LiveActor* who = offIdx == 0 ? coop::gP1 : coop::gP2;
         al::LiveActor* to = offIdx == 0 ? coop::gP2 : coop::gP1;
@@ -699,7 +828,11 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(PlayerActorHakoniwa_checkDeathArea, PlayerActorHakoniwa_checkDeathArea_bytes) &&
               CheckBytes(PlayerStateRecoveryDead_exeStart, PlayerStateRecoveryDead_exeStart_bytes) &&
               CheckBytes(PlayerStateRecoveryDead_exeRecovery, PlayerStateRecoveryDead_exeRecovery_bytes) &&
-              CheckBytes(PlayerRecoverySafetyPoint_endRecovery, PlayerRecoverySafetyPoint_endRecovery_bytes);
+              CheckBytes(PlayerRecoverySafetyPoint_endRecovery, PlayerRecoverySafetyPoint_endRecovery_bytes) &&
+              CheckBytes(rs_isPressedCollision, rs_isPressedCollision_bytes) &&
+              CheckBytes(LifeUpItem_get, LifeUpItem_get_bytes) &&
+              CheckBytes(GameDataFunction_recoveryPlayer, GameDataFunction_recoveryPlayer_bytes) &&
+              CheckBytes(GameDataFunction_isPlayerHitPointMax, GameDataFunction_isPlayerHitPointMax_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -724,6 +857,10 @@ extern "C" void exl_main(void* x0, void* x1) {
     RecoveryStartHook::InstallAtOffset(PlayerStateRecoveryDead_exeStart);
     RecoveryFlyHook::InstallAtOffset(PlayerStateRecoveryDead_exeRecovery);
     EndRecoveryHook::InstallAtOffset(PlayerRecoverySafetyPoint_endRecovery);
+    PressedHook::InstallAtOffset(rs_isPressedCollision);
+    LifeUpGetHook::InstallAtOffset(LifeUpItem_get);
+    RecoveryPlayerHook::InstallAtOffset(GameDataFunction_recoveryPlayer);
+    HitPointMaxHook::InstallAtOffset(GameDataFunction_isPlayerHitPointMax);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

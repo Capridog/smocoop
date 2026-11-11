@@ -33,6 +33,8 @@ class IUseAreaObj;
 class AreaObj;
 bool isInDeathArea(const IUseAreaObj* user, const sead::Vector3f& pos);  // 0x8050ec
 class IUseCollision;
+class HitSensor;
+LiveActor* getSensorHost(const HitSensor* sensor);  // 0x8f1ec0
 class IUseNerve;
 class Nerve;
 void setNerve(IUseNerve* user, const Nerve* nerve);  // 0x959af4
@@ -57,6 +59,10 @@ namespace rs {
 // it dereferences actor+0x78 (al::Collider), which players don't have -> null crash.
 bool isPlayerOnGround(const al::LiveActor* actor);
 }  // namespace rs
+
+namespace GameDataFunction {
+void recoveryPlayerMax(const al::LiveActor* actor);  // 0x528780: shared life counter to max
+}
 
 namespace alCollisionUtil {
 // 0x84c390. Ray from `start` along `arrow` (direction * length); true + *out on hit.
@@ -170,6 +176,20 @@ constexpr ptrdiff_t NrvRecoveryDeadRecovery = 0x1d7eff8;
 constexpr ptrdiff_t ActorStateBase_actor = 0x18;
 // PlayerRecoverySafetyPoint::endRecovery: called when the bubble lands (RecoveryDead::exeFall) or
 // the state is killed. Its first field is the player.
+// Death rules / crush / hearts (verified in Ghidra):
+//  executePreMovementNerveChange kills the player when rs::isPressedCollision(player+0x170) is true.
+//  LifeUpItem::receiveMsg stores the picker's HitSensor at item+0x110, then get() ->
+//  isPlayerHitPointMax / recoveryPlayer(item) on the shared counter.
+constexpr ptrdiff_t PlayerActorHakoniwa_collision = 0x170;
+constexpr ptrdiff_t rs_isPressedCollision = 0x56a280;
+constexpr u64 rs_isPressedCollision_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr ptrdiff_t LifeUpItem_get = 0x1c9ea8;
+constexpr u64 LifeUpItem_get_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr ptrdiff_t LifeUpItem_pickerSensor = 0x110;
+constexpr ptrdiff_t GameDataFunction_recoveryPlayer = 0x5286f0;
+constexpr u64 GameDataFunction_recoveryPlayer_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr ptrdiff_t GameDataFunction_isPlayerHitPointMax = 0x5286c0;
+constexpr u64 GameDataFunction_isPlayerHitPointMax_bytes = 0x910003fda9bf7bfdULL;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;
 constexpr u64 PlayerRecoverySafetyPoint_endRecovery_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t RecoveryDead_flightFrames = 0x74;
