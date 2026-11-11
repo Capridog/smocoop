@@ -22,12 +22,17 @@ s32 getPlayerControllerPort(s32 playerIndex);          // 0x85bfec
 LiveActor* getPlayerActor(const LiveActor* actor, s32 index);     // 0x9a3f70 (hooked)
 const sead::Vector3f& getTrans(const LiveActor* actor);           // 0x8ee66c
 void calcSideDir(sead::Vector3f* out, const LiveActor* actor);    // 0x8ee6ec
-bool isOnGround(const LiveActor* actor, u32 margin);              // 0x8d8074
 void resetPosition(LiveActor* actor, const sead::Vector3f& trans);// 0x8e28b8
 void setVelocityZero(LiveActor* actor);                           // 0x8e2c68
 s32 getMainControllerPort();                           // 0x85bfb0
 PadRumbleKeeper* createPadRumbleKeeper(const LiveActor* actor, s32 port);  // 0x86b710
 }  // namespace al
+
+namespace rs {
+// Player-aware ground check (0x571224). al::isOnGround must NOT be used on players:
+// it dereferences actor+0x78 (al::Collider), which players don't have -> null crash.
+bool isPlayerOnGround(const al::LiveActor* actor);
+}  // namespace rs
 
 namespace alPlayerFunction {
 void registerPlayer(al::LiveActor* actor, al::PadRumbleKeeper* keeper);  // 0x9a4fe4

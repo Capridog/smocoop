@@ -131,7 +131,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
         Orig(scene);
         if (coop::gP2 == nullptr || coop::gP1 == nullptr || coop::gP2Placed) return;
         if (++coop::gFramesSinceInit > 60 * 20) { coop::gP2Placed = true; return; }
-        if (!al::isOnGround(coop::gP1, 0)) return;
+        if (!rs::isPlayerOnGround(coop::gP1)) return;
         const sead::Vector3f& p1 = al::getTrans(coop::gP1);
         sead::Vector3f side;
         al::calcSideDir(&side, coop::gP1);
