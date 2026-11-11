@@ -254,6 +254,9 @@ constexpr u64 ResourceSystem_findOrCreateResource_bytes = 0xa9014ff4f81d0ff5ULL;
 constexpr ptrdiff_t al_findResource = 0x9cb4e0;
 // GOT slot holding the sead::SafeStringBase<char> vtable object (vtable = value + 0x10).
 constexpr ptrdiff_t GOT_SafeStringBase_vtable = 0x1e4ebb8;
+// Closet::receiveMsg(const al::SensorMsg*, al::HitSensor* other, al::HitSensor* self)
+constexpr ptrdiff_t Closet_receiveMsg = 0x24e8f0;
+constexpr u64 Closet_receiveMsg_bytes = 0xa90157f6fc1c0fe8ULL;
 constexpr u64 al_findResource_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t CounterLifeCtrl_normalLayout = 0x18;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;

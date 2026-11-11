@@ -341,6 +341,21 @@ HOOK_DEFINE_TRAMPOLINE(FindResourceHook) {
     }
 };
 
+// ------------------------------------------------------------------------ wardrobe (closet)
+// After an outfit change the stage restarts with Closet in "player start" mode (+0x118): its
+// sensor follows player 0 and binds the first player sensor that sends BindStart/BindInit,
+// storing the puppet at +0x110 (Ghidra: Closet::receiveMsg 0x24e8f0, exeWearEnd 0x24e830).
+// P2's sensor also answered, overwrote +0x110 with P2's puppet, and Mario's bind never ended.
+// The wardrobe belongs to P1: Closet ignores every message from P2's sensors.
+HOOK_DEFINE_TRAMPOLINE(ClosetReceiveMsgHook) {
+    static bool Callback(al::LiveActor* self, const void* msg, al::HitSensor* other,
+                         al::HitSensor* own) {
+        if (coop::gP2 != nullptr && other != nullptr && al::getSensorHost(other) == coop::gP2)
+            return false;
+        return Orig(self, msg, other, own);
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(PlayerInitHook) {
     static void Callback(PlayerActorHakoniwa* self, const al::ActorInitInfo& actorInfo,
                          const PlayerInitInfo& playerInfo) {
@@ -1336,7 +1351,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_findOrCreateActorResourceWithAnimResource,
                          al_findOrCreateActorResourceWithAnimResource_bytes) &&
               CheckBytes(ResourceSystem_findOrCreateResource, ResourceSystem_findOrCreateResource_bytes) &&
-              CheckBytes(al_findResource, al_findResource_bytes);
+              CheckBytes(al_findResource, al_findResource_bytes) &&
+              CheckBytes(Closet_receiveMsg, Closet_receiveMsg_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1372,6 +1388,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     FindOrCreateActorResourceAnimHook::InstallAtOffset(al_findOrCreateActorResourceWithAnimResource);
     ResourceFindOrCreateHook::InstallAtOffset(ResourceSystem_findOrCreateResource);
     FindResourceHook::InstallAtOffset(al_findResource);
+    ClosetReceiveMsgHook::InstallAtOffset(Closet_receiveMsg);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
