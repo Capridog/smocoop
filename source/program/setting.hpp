@@ -2,10 +2,10 @@
 
 #include "common.hpp"
 
-#define EXL_MODULE_NAME "exlaunch"
+#define EXL_MODULE_NAME "OdysseyCoop"
 
 #define EXL_DEBUG
-#define EXL_USE_FAKEHEAP
+// #define EXL_USE_FAKEHEAP  (no newlib; malloc comes from the game)
 
 /*
 #define EXL_SUPPORTS_REBOOTPAYLOAD

@@ -11,5 +11,5 @@ struct ModuleName {
     char name[ModuleNameLength + 1];
 };
 
-__attribute__((section(".nx-module-name")))
+__attribute__((section(".nx-module-name"), used))
 const ModuleName s_ModuleName = {.unknown = 0, .name_length = ModuleNameLength, .name = EXL_MODULE_NAME};
