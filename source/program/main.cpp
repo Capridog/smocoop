@@ -29,6 +29,7 @@ static s32 gP2Hp = kP2MaxHp;
 static bool gP2RespawnPending = false;
 static bool gGameOver = false;      // both brothers down: real death in progress
 static bool gForceP1Death = false;  // send P1 into the vanilla death sequence next frame
+static bool gToucherIsP2 = false;   // a pipe is processing P2's touch right now
 
 template <typename T>
 static T Field(const void* base, ptrdiff_t off) {
@@ -185,6 +186,10 @@ namespace coop::cam {
 static void Reset();
 static void Update();
 }  // namespace coop::cam
+namespace coop::echo {
+static void Reset();
+static void Install(al::LiveActor* player, s32 idx);
+}  // namespace coop::echo
 
 // ---------------------------------------------------------------------------- spawning (step 2)
 
@@ -192,9 +197,14 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
     static void Callback(StageScene* scene, const al::SceneInitInfo& info) {
         coop::ResetStageState();
         coop::cam::Reset();
+        coop::echo::Reset();
         coop::gInStageSceneInit = true;
         Orig(scene, info);
         coop::gInStageSceneInit = false;
+        if (coop::gP1 != nullptr && coop::gP2 != nullptr) {
+            coop::echo::Install(coop::gP1, 0);
+            coop::echo::Install(coop::gP2, 1);
+        }
         COOP_LOG("StageScene::init done. P1=%p P2=%p P2port=%d", coop::gP1, coop::gP2,
                  coop::gP2Port);
     }
@@ -261,6 +271,7 @@ HOOK_DEFINE_TRAMPOLINE(RegisterPlayerHook) {
 
 static al::LiveActor* RedirectOwnPlayer(const al::LiveActor* caller, s32 index) {
     if (index != 0 || coop::gP2 == nullptr || caller == nullptr) return nullptr;
+    if (coop::gToucherIsP2) return coop::gP2;
     if (caller == coop::gP2 || caller == coop::gP2Cap) return coop::gP2;
     if (caller == coop::P2HackActor()) return coop::gP2;
     return nullptr;
@@ -407,6 +418,212 @@ HOOK_DEFINE_TRAMPOLINE(SafetyPointValidHook) {
     }
 };
 
+// --------------------------------------------------------- pipes & doors: follow with animation
+// The pipe/door moves the brother who entered purely through IUsePlayerPuppet virtual calls. Both
+// brothers' puppets get a copy of the vtable whose mutating slots record the call. While a brother
+// travels through an in-stage pipe or door, every call is replayed on the other brother's puppet
+// 25 frames later, so he walks in, travels and pops out right behind with the same animation.
+namespace coop::echo {
+constexpr s32 kDelay = 25;
+constexpr s32 kSlots = 38;
+enum Kind : u8 { K0, KVec3, KQuat, KStr, KFloat, KVec3Int };
+struct Entry { u32 frame; u16 slot; Kind kind; float f[4]; s32 i; const char* str; void* strVptr; };
+struct SafeStr { void* vptr; const char* str; };
+static Entry gQ[1024];
+static u32 gHead = 0, gTail = 0;
+static u64 gTable[2 + kSlots];
+static void* gOrig[kSlots];
+static bool gTableReady = false;
+static void* gPup[2] = {nullptr, nullptr};
+static s32 gLeader = -1;
+static u32 gFrame = 0, gStart = 0;
+static bool gFollowerStarted = false, gStartReq = false;
+static s32 gDepth = 0;
+
+static bool Active() { return gLeader >= 0; }
+static s32 LeaderIdx() { return gLeader; }
+static bool IsBinding(void* pup) {
+    return coop::Field<void*>(pup, 0x70) != nullptr && coop::Field<void*>(pup, 0x78) != nullptr;
+}
+static void End(const char* why) {
+    if (gLeader >= 0) COOP_LOG("Pipe/door follow ended (%s)", why);
+    gLeader = -1; gHead = gTail = 0; gStartReq = false; gFollowerStarted = false;
+    coop::gIgnoreJumps = 10;
+}
+static void Reset() { End("stage change"); gPup[0] = gPup[1] = nullptr; gDepth = 0; }
+
+static Entry* Push(void* self, s32 slot, Kind kind) {
+    if (gLeader < 0 || self != gPup[gLeader] || gDepth > 0) return nullptr;
+    if (gHead - gTail >= 1024) return nullptr;
+    Entry* e = &gQ[gHead++ % 1024];
+    *e = {};
+    e->frame = gFrame; e->slot = (u16)slot; e->kind = kind;
+    return e;
+}
+
+template <int S> static void T0(void* self) {
+    Push(self, S, K0);
+    gDepth++; ((void (*)(void*))gOrig[S])(self); gDepth--;
+}
+template <int S> static void TV3(void* self, const sead::Vector3f& v) {
+    if (Entry* e = Push(self, S, KVec3)) { e->f[0] = v.x; e->f[1] = v.y; e->f[2] = v.z; }
+    gDepth++; ((void (*)(void*, const sead::Vector3f&))gOrig[S])(self, v); gDepth--;
+}
+template <int S> static void TQ(void* self, const float* q) {
+    if (Entry* e = Push(self, S, KQuat)) std::memcpy(e->f, q, sizeof(float) * 4);
+    gDepth++; ((void (*)(void*, const float*))gOrig[S])(self, q); gDepth--;
+}
+template <int S> static void TStr(void* self, const SafeStr& str) {
+    if (Entry* e = Push(self, S, KStr)) { e->str = str.str; e->strVptr = str.vptr; }
+    gDepth++; ((void (*)(void*, const SafeStr&))gOrig[S])(self, str); gDepth--;
+}
+template <int S> static void TF(void* self, float f) {
+    if (Entry* e = Push(self, S, KFloat)) e->f[0] = f;
+    gDepth++; ((void (*)(void*, float))gOrig[S])(self, f); gDepth--;
+}
+template <int S> static void TV3I(void* self, const sead::Vector3f& v, s32 i) {
+    if (Entry* e = Push(self, S, KVec3Int)) { e->f[0] = v.x; e->f[1] = v.y; e->f[2] = v.z; e->i = i; }
+    gDepth++; ((void (*)(void*, const sead::Vector3f&, s32))gOrig[S])(self, v, i); gDepth--;
+}
+
+static bool IsInStagePipeOrDoor(al::HitSensor* binder) {
+    al::LiveActor* host = binder ? al::getSensorHost(binder) : nullptr;
+    if (!host) return false;
+    uintptr_t vptr = coop::Field<uintptr_t>(host, 0) - exl::util::modules::GetTargetStart();
+    return vptr == (uintptr_t)smo100::Vptr_Dokan || vptr == (uintptr_t)smo100::Vptr_DokanMaze ||
+           vptr == (uintptr_t)smo100::Vptr_DoorWarp;
+}
+
+static void TStart(void* self, al::HitSensor* binder, al::HitSensor* player) {
+    ((void (*)(void*, al::HitSensor*, al::HitSensor*))gOrig[0])(self, binder, player);
+    if (gLeader >= 0 || coop::gP1 == nullptr || coop::gP2 == nullptr || coop::gGameOver) return;
+    s32 idx = self == gPup[0] ? 0 : (self == gPup[1] ? 1 : -1);
+    if (idx < 0 || !IsInStagePipeOrDoor(binder)) return;
+    gLeader = idx; gStart = gFrame; gHead = gTail = 0;
+    gFollowerStarted = false; gStartReq = false;
+    COOP_LOG("Pipe/door: P%d went in, P%d follows %d frames behind", idx + 1, 2 - idx, kDelay);
+}
+
+static void Install(al::LiveActor* player, s32 idx) {
+    void* pup = coop::Field<void*>(player, smo100::PlayerActorHakoniwa_puppet);
+    gPup[idx] = nullptr;
+    if (pup == nullptr) return;
+    uintptr_t base = exl::util::modules::GetTargetStart();
+    u64* vt = coop::Field<u64*>(pup, 0);
+    if (!gTableReady) {
+        if ((uintptr_t)vt != base + smo100::Vtbl_PlayerPuppet ||
+            vt[0] != base + smo100::PlayerPuppet_start_fn) {
+            COOP_LOG("PlayerPuppet vtable not as expected; pipe follow disabled");
+            return;
+        }
+        std::memcpy(gTable, vt - 2, sizeof(gTable));
+        for (s32 i = 0; i < kSlots; i++) gOrig[i] = (void*)vt[i];
+        u64* t = gTable + 2;
+        t[0] = (u64)&TStart;
+        t[1] = (u64)&T0<1>;    t[2] = (u64)&T0<2>;
+        t[3] = (u64)&TV3<3>;   t[4] = (u64)&TQ<4>;   t[5] = (u64)&TV3<5>;  t[6] = (u64)&TV3<6>;
+        t[12] = (u64)&TStr<12>; t[15] = (u64)&TF<15>;
+        t[17] = (u64)&T0<17>;  t[18] = (u64)&T0<18>; t[20] = (u64)&T0<20>; t[21] = (u64)&T0<21>;
+        t[22] = (u64)&T0<22>;  t[23] = (u64)&T0<23>; t[27] = (u64)&T0<27>; t[29] = (u64)&TV3I<29>;
+        t[31] = (u64)&T0<31>;  t[32] = (u64)&T0<32>; t[36] = (u64)&T0<36>; t[37] = (u64)&T0<37>;
+        gTableReady = true;
+    } else if ((uintptr_t)vt != base + smo100::Vtbl_PlayerPuppet) {
+        return;
+    }
+    coop::SetField<u64*>(pup, 0, gTable + 2);
+    gPup[idx] = pup;
+}
+
+static void Replay(const Entry& e, void* fp) {
+    sead::Vector3f v = {e.f[0], e.f[1], e.f[2]};
+    switch (e.kind) {
+    case K0:
+        // a cancel on the leader ends the follower's bind properly (end = BindEnd msg + cancel)
+        ((void (*)(void*))gOrig[e.slot == 2 ? 1 : e.slot])(fp);
+        break;
+    case KVec3: ((void (*)(void*, const sead::Vector3f&))gOrig[e.slot])(fp, v); break;
+    case KQuat: ((void (*)(void*, const float*))gOrig[e.slot])(fp, e.f); break;
+    case KStr: {
+        SafeStr str = {e.strVptr, e.str};
+        ((void (*)(void*, const SafeStr&))gOrig[e.slot])(fp, str);
+        break;
+    }
+    case KFloat: ((void (*)(void*, float))gOrig[e.slot])(fp, e.f[0]); break;
+    case KVec3Int: ((void (*)(void*, const sead::Vector3f&, s32))gOrig[e.slot])(fp, v, e.i); break;
+    }
+}
+
+// Runs inside the follower's own update (checkDeathArea hook): put him into the game's Bind state
+// bound to his own body sensor (so nothing is ever sent to the pipe on his behalf).
+static bool TryStartFollower(al::LiveActor* actor) {
+    if (gLeader < 0 || !gStartReq || actor != coop::PlayerAt(1 - gLeader)) return false;
+    gStartReq = false;
+    s32 f = 1 - gLeader;
+    void* pup = gPup[f];
+    void* keeper = coop::Field<void*>(actor, smo100::PlayerActorHakoniwa_bindKeeper);
+    if (pup == nullptr || keeper == nullptr || coop::HackActorOf(actor) != nullptr ||
+        coop::gBubbleBusy[f] > 0 || coop::gGameOver || al::isDead(actor) || IsBinding(pup) ||
+        coop::Field<void*>(keeper, 0x8) != nullptr) {
+        End("follower busy");
+        return false;
+    }
+    auto* body = coop::Field<al::HitSensor*>(keeper, 0x0);
+    coop::SetField<al::HitSensor*>(keeper, 0x8, body);
+    coop::SetField<u8>(keeper, 0x24, 0);
+    ((void (*)(void*, al::HitSensor*, al::HitSensor*))gOrig[0])(pup, body, body);
+    void* in = coop::Field<void*>(actor, smo100::PlayerActorHakoniwa_input138);
+    if (in) { coop::SetField<u8>(in, 0x9b, 1); coop::SetField<u8>(in, 0xcc, 1); }
+    al::setNerve(reinterpret_cast<al::IUseNerve*>(actor),
+                 reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() +
+                                                    smo100::NrvPlayerBind));
+    gFollowerStarted = true;
+    COOP_LOG("Pipe/door: P%d now following through", f + 1);
+    return true;
+}
+
+// once per frame
+static void Update() {
+    gFrame++;
+    if (gLeader < 0) return;
+    if (gFrame - gStart > 60 * 30) {
+        void* fp = gPup[1 - gLeader];
+        if (gFollowerStarted && fp && IsBinding(fp)) ((void (*)(void*))gOrig[1])(fp);
+        End("timeout");
+        return;
+    }
+    if (!gFollowerStarted) {
+        if (gFrame - gStart >= (u32)kDelay) gStartReq = true;
+        return;
+    }
+    void* fp = gPup[1 - gLeader];
+    if (!IsBinding(fp)) { End("follower left the bind"); return; }
+    while (gTail != gHead && gQ[gTail % 1024].frame + kDelay <= gFrame) {
+        Entry e = gQ[gTail++ % 1024];
+        Replay(e, fp);
+        if (e.kind == K0 && (e.slot == 1 || e.slot == 2)) { End("follower came out"); return; }
+    }
+}
+}  // namespace coop::echo
+
+// Vanilla pipes only ever bind player 0 (rs::requestBindPlayer -> getPlayerActor(pipe, 0)). While
+// a pipe handles a touch from P2, "player 0" means P2, so P2 can enter pipes too.
+HOOK_DEFINE_TRAMPOLINE(DokanAttackHook) {
+    static void Callback(void* self, al::HitSensor* own, al::HitSensor* other) {
+        coop::gToucherIsP2 = coop::gP2 != nullptr && other != nullptr &&
+                             al::getSensorHost(other) == coop::gP2;
+        Orig(self, own, other);
+        coop::gToucherIsP2 = false;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(DokanStageChangeAttackHook) {
+    static void Callback(void* self, al::HitSensor* own, al::HitSensor* other) {
+        coop::gToucherIsP2 = coop::gP2 != nullptr && other != nullptr &&
+                             al::getSensorHost(other) == coop::gP2;
+        Orig(self, own, other);
+        coop::gToucherIsP2 = false;
+    }
+};
+
 // Bubble requests are executed from inside the player's own checkDeathArea(), exactly where the
 // vanilla pit-recovery branch runs (it returns true after starting recovery). Calling the recovery
 // routine from outside the player's update (first attempt) did not stick.
@@ -414,6 +631,7 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
     static bool Callback(PlayerActorHakoniwa* self) {
         auto* actor = reinterpret_cast<al::LiveActor*>(self);
         if (coop::gP1 != nullptr && coop::gP2 != nullptr) {
+            if (coop::echo::TryStartFollower(actor)) return true;
             if (actor == coop::gP1 && coop::gForceP1Death) {
                 // vanilla fall-death: life to zero + Abyss state with no valid safety point
                 coop::gForceP1Death = false;
@@ -710,6 +928,13 @@ static void Update() {
     }
     gPrevP1 = p1; gPrevP2 = p2; gHavePrev = true;
 
+    coop::echo::Update();
+    if (coop::echo::Active()) {  // animated follow in progress: no fallback warp, no bubble
+        coop::gIgnoreJumps = 10;
+        gBubbleCooldown = 90;
+        gFarFrames = 0;
+        gWarpFollow = -1;
+    }
     // Pipes / doors inside a stage: the game teleports the brother who went in (a position jump
     // far beyond any normal movement). The other brother follows him through: he is put beside
     // him as soon as he is out and standing, instead of waiting for the off-screen bubble.
@@ -796,6 +1021,7 @@ HOOK_DEFINE_TRAMPOLINE(CameraTargetHook) {
         Separation(&d);
         // together: look at the midpoint; split up: look at the leader (switches in ~0.5 s)
         float want = gLeader < 0 ? 0.5f : (gLeader == 1 ? 1.0f : 0.0f);
+        if (coop::echo::Active()) want = coop::echo::LeaderIdx() == 1 ? 1.0f : 0.0f;
         gShare += (want - gShare) * kShareLerp;
         out->x += d.x * gShare;
         out->y += d.y * gShare;
@@ -886,7 +1112,9 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(rs_isPressedCollision, rs_isPressedCollision_bytes) &&
               CheckBytes(LifeUpItem_get, LifeUpItem_get_bytes) &&
               CheckBytes(GameDataFunction_recoveryPlayer, GameDataFunction_recoveryPlayer_bytes) &&
-              CheckBytes(GameDataFunction_isPlayerHitPointMax, GameDataFunction_isPlayerHitPointMax_bytes);
+              CheckBytes(GameDataFunction_isPlayerHitPointMax, GameDataFunction_isPlayerHitPointMax_bytes) &&
+              CheckBytes(Dokan_attackSensor, Dokan_attackSensor_bytes) &&
+              CheckBytes(DokanStageChange_attackSensor, DokanStageChange_attackSensor_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -915,6 +1143,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     LifeUpGetHook::InstallAtOffset(LifeUpItem_get);
     RecoveryPlayerHook::InstallAtOffset(GameDataFunction_recoveryPlayer);
     HitPointMaxHook::InstallAtOffset(GameDataFunction_isPlayerHitPointMax);
+    DokanAttackHook::InstallAtOffset(Dokan_attackSensor);
+    DokanStageChangeAttackHook::InstallAtOffset(DokanStageChange_attackSensor);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

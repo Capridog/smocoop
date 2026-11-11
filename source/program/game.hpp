@@ -190,6 +190,31 @@ constexpr ptrdiff_t GameDataFunction_recoveryPlayer = 0x5286f0;
 constexpr u64 GameDataFunction_recoveryPlayer_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t GameDataFunction_isPlayerHitPointMax = 0x5286c0;
 constexpr u64 GameDataFunction_isPlayerHitPointMax_bytes = 0x910003fda9bf7bfdULL;
+// Pipes / doors (verified in Ghidra):
+//  DokanPuppetController / DoorWarpPuppetController drive the player only through
+//  IUsePlayerPuppet virtual calls (rs::setPuppetTrans etc. are thin virtual wrappers).
+//  PlayerPuppet vtable at main+0x1d7ca18 (+0x10 = first slot): 0x00 start, 0x08 end, 0x10 cancel,
+//  0x18 setTrans, 0x20 setPose, 0x28 setVelocity, 0x30 resetPosition, 0x60 startAction,
+//  0x78 setAnimRate, 0x88 hide, 0x90 show, 0xa0/0xa8 silhouette, 0xb0/0xb8 shadow,
+//  0xd8 setBindEndOnGround, 0xe8 setBindEndJump, 0xf8/0x100 collision check, 0x120/0x128 sensor.
+//  PlayerPuppet::start stores binder sensor at +0x70 and player sensor at +0x78 (isBinding).
+//  PlayerActorHakoniwa: puppet at +0x178, PlayerBindKeeper at +0x1f0 ([0] body sensor,
+//  [+8] bound sensor, [+0x24] flag); Bind nerve = main+0x1d789e0 (execute -> exeBind);
+//  entering Bind also sets *(player+0x138)+0x9b and +0xcc to 1.
+//  rs::requestBindPlayer(pipe, sensor) binds getPlayerActor(pipe, 0), i.e. only P1 in vanilla.
+constexpr ptrdiff_t Vtbl_PlayerPuppet = 0x1d7ca18 + 0x10;
+constexpr ptrdiff_t PlayerPuppet_start_fn = 0x45f714;
+constexpr ptrdiff_t Vptr_Dokan = 0x1cedb90 + 0x18;
+constexpr ptrdiff_t Vptr_DokanMaze = 0x1cee9a8 + 0x18;
+constexpr ptrdiff_t Vptr_DoorWarp = 0x1cf1018 + 0x18;
+constexpr ptrdiff_t PlayerActorHakoniwa_puppet = 0x178;
+constexpr ptrdiff_t PlayerActorHakoniwa_bindKeeper = 0x1f0;
+constexpr ptrdiff_t PlayerActorHakoniwa_input138 = 0x138;
+constexpr ptrdiff_t NrvPlayerBind = 0x1d789e0;
+constexpr ptrdiff_t Dokan_attackSensor = 0x2576ec;
+constexpr u64 Dokan_attackSensor_bytes = 0xf90023f5d101c3ffULL;
+constexpr ptrdiff_t DokanStageChange_attackSensor = 0x25daf4;
+constexpr u64 DokanStageChange_attackSensor_bytes = 0xf90023f5d101c3ffULL;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;
 constexpr u64 PlayerRecoverySafetyPoint_endRecovery_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t RecoveryDead_flightFrames = 0x74;
