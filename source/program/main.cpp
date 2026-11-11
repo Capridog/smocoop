@@ -102,11 +102,17 @@ static void PlaceP2BesideP1(const char* why) {
 }
 }  // namespace coop
 
+namespace coop::cam {
+static void Reset();
+static void Update();
+}  // namespace coop::cam
+
 // ---------------------------------------------------------------------------- spawning (step 2)
 
 HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
     static void Callback(StageScene* scene, const al::SceneInitInfo& info) {
         coop::ResetStageState();
+        coop::cam::Reset();
         coop::gInStageSceneInit = true;
         Orig(scene, info);
         coop::gInStageSceneInit = false;
@@ -308,9 +314,18 @@ constexpr float kZoomStart = 500.0f;   // separation where zoom-out begins
 constexpr float kZoomFull = 3000.0f;   // separation where zoom-out is at maximum
 constexpr float kZoomMax = 1.9f;       // max distance multiplier
 constexpr float kLerp = 0.08f;         // per-frame smoothing
-constexpr float kShareEnd = 5000.0f;   // beyond this the camera stops sharing and follows P1
+constexpr float kShareEnd = 5000.0f;   // by this separation the camera is fully on the leader
 static float gZoom = 1.0f;
-static float gShare = 0.0f;
+static float gShare = 0.0f;            // 0 = P1, 0.5 = midpoint, 1 = P2
+
+// 3D World rule: when the brothers split up, the camera goes with whoever went off.
+// Each frame we keep a smoothed "how much has this player been moving" value; the moment the
+// separation passes kZoomFull, the brother who has been moving more is the leader, and the camera
+// stays with him until the two are close again.
+static float gMoveP1 = 0.0f, gMoveP2 = 0.0f;
+static sead::Vector3f gPrevP1 = {}, gPrevP2 = {};
+static bool gHavePrev = false;
+static s32 gLeader = -1;  // -1 none, 0 = P1, 1 = P2
 
 static sead::Vector3f FocusPos(al::LiveActor* player, al::LiveActor* hack) {
     return al::getTrans(hack ? hack : player);
@@ -323,6 +338,37 @@ static float Separation(sead::Vector3f* delta) {
     *delta = {b.x - a.x, b.y - a.y, b.z - a.z};
     return __builtin_sqrtf(delta->x * delta->x + delta->z * delta->z);
 }
+static float Dist(const sead::Vector3f& a, const sead::Vector3f& b) {
+    float x = a.x - b.x, y = a.y - b.y, z = a.z - b.z;
+    return __builtin_sqrtf(x * x + y * y + z * z);
+}
+static void Reset() {
+    gZoom = 1.0f; gShare = 0.0f; gMoveP1 = gMoveP2 = 0.0f; gHavePrev = false; gLeader = -1;
+}
+// called once per frame from StageSceneControl
+static void Update() {
+    if (!Active()) { gLeader = -1; gHavePrev = false; return; }
+    sead::Vector3f p1 = al::getTrans(coop::gP1);
+    sead::Vector3f p2 = FocusPos(coop::gP2, coop::P2HackActor());
+    if (gHavePrev) {
+        float m1 = Dist(p1, gPrevP1), m2 = Dist(p2, gPrevP2);
+        if (m1 > 200.0f) m1 = 0.0f;  // ignore teleports / recoveries
+        if (m2 > 200.0f) m2 = 0.0f;
+        gMoveP1 += (m1 - gMoveP1) * 0.05f;  // ~1 second memory
+        gMoveP2 += (m2 - gMoveP2) * 0.05f;
+    }
+    gPrevP1 = p1; gPrevP2 = p2; gHavePrev = true;
+
+    sead::Vector3f d;
+    float sep = Separation(&d);
+    if (gLeader < 0 && sep > kZoomFull) {
+        gLeader = gMoveP2 > gMoveP1 ? 1 : 0;
+        COOP_LOG("Camera: brothers split up, following P%d", gLeader + 1);
+    } else if (gLeader >= 0 && sep < kZoomFull * 0.8f) {
+        gLeader = -1;
+        COOP_LOG("Camera: brothers back together, sharing view");
+    }
+}
 }  // namespace coop::cam
 
 HOOK_DEFINE_TRAMPOLINE(CameraTargetHook) {
@@ -332,8 +378,10 @@ HOOK_DEFINE_TRAMPOLINE(CameraTargetHook) {
         if (!Active()) { gShare = 0.0f; return; }
         sead::Vector3f d;
         float sep = Separation(&d);
-        // share the view 50/50 up to kZoomFull, then fade back to P1 by kShareEnd
-        float want = 0.5f * (1.0f - Clamp01((sep - kZoomFull) / (kShareEnd - kZoomFull)));
+        // share the view 50/50 up to kZoomFull, then move onto the leader by kShareEnd
+        float toLeader = Clamp01((sep - kZoomFull) / (kShareEnd - kZoomFull));
+        float leaderShare = gLeader == 1 ? 1.0f : 0.0f;
+        float want = gLeader < 0 ? 0.5f : 0.5f + (leaderShare - 0.5f) * toLeader;
         gShare += (want - gShare) * kLerp;
         out->x += d.x * gShare;
         out->y += d.y * gShare;
@@ -368,6 +416,7 @@ HOOK_DEFINE_TRAMPOLINE(MakeLookAtHook) {
 HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
     static void Callback(StageScene* scene) {
         Orig(scene);
+        coop::cam::Update();
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return;
 
         if (coop::gP2RespawnPending) {
