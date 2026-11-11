@@ -381,12 +381,47 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryStartHook) {
     }
 };
 
+// Which brother a bubble should end next to: P2's bubbles (pit/quicksand or off-screen) always go
+// to P1; P1 only gets a co-op bubble (off-screen rule) and goes to P2.
+static al::LiveActor* BubbleTargetOfState(const void* state) {
+    auto* actor = coop::Field<al::LiveActor*>(state, smo100::ActorStateBase_actor);
+    if (coop::gP1 == nullptr || coop::gP2 == nullptr) return nullptr;
+    if (actor == coop::gP2) return coop::gP1;
+    if (actor == coop::gP1 && coop::gForcedRecovery[0] > 0) return coop::gP2;
+    return nullptr;
+}
+
+// The bubble's path is fixed on its first frame (start +0x50, up +0x5c, horizontal offset +0x68,
+// vertical arc a*t^2 + b*t with a=+0x48, b=+0x4c, a+b = vertical offset; verified in Ghidra), so a
+// brother who keeps moving would be met at his OLD spot. Every few frames we re-aim the safety point
+// at the brother's current position and update the horizontal offset and arc end height.
+static void RetargetBubble(void* state, al::LiveActor* target) {
+    auto* sp = coop::Field<PlayerRecoverySafetyPoint*>(state, smo100::RecoveryDead_safetyPoint);
+    sead::Vector3f spot = coop::FindSpotBeside(target);
+    sead::Vector3f up1 = {0.0f, 1.0f, 0.0f};
+    sp->setSafetyPoint(spot, up1, nullptr);
+    auto start = coop::Field<sead::Vector3f>(state, smo100::RecoveryDead_start);
+    auto up = coop::Field<sead::Vector3f>(state, smo100::RecoveryDead_up);
+    sead::Vector3f v = {spot.x - start.x, spot.y - start.y, spot.z - start.z};
+    float vert = v.x * up.x + v.y * up.y + v.z * up.z;
+    sead::Vector3f horiz = {v.x - up.x * vert, v.y - up.y * vert, v.z - up.z * vert};
+    coop::SetField<sead::Vector3f>(state, smo100::RecoveryDead_horiz, horiz);
+    float a = coop::Field<float>(state, smo100::RecoveryDead_arcA);
+    float b = coop::Field<float>(state, smo100::RecoveryDead_arcB);
+    coop::SetField<float>(state, smo100::RecoveryDead_arcB, b + (vert - (a + b)));
+}
+
 HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
     static void Callback(void* state) {
         auto* nerveUser = reinterpret_cast<al::IUseNerve*>(state);
         bool first = al::isFirstStep(nerveUser);
+        al::LiveActor* target = BubbleTargetOfState(state);
+        if (!first && target != nullptr && al::getNerveStep(nerveUser) % 6 == 0)
+            RetargetBubble(state, target);
         Orig(state);
-        if (!first || CoopBubbleIndexOfState(state) < 0) return;
+        if (!first) return;
+        if (target != nullptr) RetargetBubble(state, target);  // aim at the current position now
+        if (CoopBubbleIndexOfState(state) < 0) return;
         s32 fly = coop::Field<s32>(state, smo100::RecoveryDead_flightFrames) / 2;
         if (fly < kCoopFlyMin) fly = kCoopFlyMin;
         if (fly > kCoopFlyMax) fly = kCoopFlyMax;

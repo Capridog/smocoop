@@ -174,6 +174,12 @@ constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;
 constexpr u64 PlayerRecoverySafetyPoint_endRecovery_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t RecoveryDead_flightFrames = 0x74;
 constexpr ptrdiff_t RecoveryDead_spinFrames = 0x78;
+constexpr ptrdiff_t RecoveryDead_safetyPoint = 0x20;  // PlayerRecoverySafetyPoint*
+constexpr ptrdiff_t RecoveryDead_arcA = 0x48;
+constexpr ptrdiff_t RecoveryDead_arcB = 0x4c;
+constexpr ptrdiff_t RecoveryDead_start = 0x50;  // Vector3f, player trans when the flight began
+constexpr ptrdiff_t RecoveryDead_up = 0x5c;     // Vector3f, -gravity
+constexpr ptrdiff_t RecoveryDead_horiz = 0x68;  // Vector3f, horizontal start->target offset
 
 constexpr ptrdiff_t PlayerFunction_isPlayerHitPointOne = 0x447bdc;
 constexpr u64 PlayerFunction_isPlayerHitPointOne_bytes = 0xa9017bfdd10083ffULL;
