@@ -37,6 +37,7 @@ static char gP2Costume[64] = {};
 static char gP2CapName[64] = {};
 static bool gClosetP2 = false;   // P2 is using the wardrobe right now (Closet bind -> state kill)
 static bool gUiPortP2 = false;   // al::getMainControllerPort answers P2's port
+static bool gLuigiCloset = false;  // building the wardrobe's Luigi preview models right now
 
 template <typename T>
 static T Field(const void* base, ptrdiff_t off) {
@@ -200,6 +201,9 @@ static void Install(al::LiveActor* player, s32 idx);
 namespace coop::hud {
 static void Reset();
 }  // namespace coop::hud
+namespace coop::closet {
+static void Reset();
+}  // namespace coop::closet
 
 // ---------------------------------------------------------------------------- spawning (step 2)
 
@@ -208,6 +212,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
         coop::ResetStageState();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
+        coop::closet::Reset();
         coop::cam::Reset();
         coop::echo::Reset();
         coop::hud::Reset();
@@ -240,7 +245,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
 // the current scene category and are freed with the stage. P1 is never touched.
 #include "program/luigi_files.hpp"
 namespace coop::luigi {
-constexpr bool kRedirectAnims = false;  // Mario's PlayerAnimation* drives Luigi's skeleton
+constexpr bool kRedirectAnims = true;  // Luigi's own PlayerAnimation* (hands: no oversized fist)
 static char gBuf[8][160];
 static u32 gBufIdx = 0;
 static u32 gRedirects = 0;
@@ -258,7 +263,7 @@ static bool InList(const char* const* list, size_t n, const char* key) {
 
 // "ObjectData/MarioHead" -> "ObjectData/P2Luigi/P2LuigiHead" (only if the Luigi file exists).
 static const char* Redirect(const char* name) {
-    if (!gSpawningP2 || name == nullptr) return nullptr;
+    if (!(gSpawningP2 || gLuigiCloset) || name == nullptr) return nullptr;
     constexpr const char kDir[] = "ObjectData/";
     if (std::strncmp(name, kDir, sizeof(kDir) - 1) != 0) return nullptr;
     const char* base = name + sizeof(kDir) - 1;
@@ -419,7 +424,143 @@ static bool CalledFromClosetState(void* ret) {
     uintptr_t off = reinterpret_cast<uintptr_t>(ret) - exl::util::modules::GetTargetStart();
     return off >= kStateBegin && off < kStateEnd;
 }
+
+// ---- Luigi preview models.
+// StageSceneStateCloset::initModel (0x4d5560, Ghidra) builds one preview model per entry of
+// rs::getClothList + rs::getCapList: entry array at state+0x1a0 (stride 0x4b0, count +0x1a8),
+// entry = FixedSafeString name (cstr at +0x8), +0x58 model actor, +0x278 cloth info (non-null:
+// body entry), +0x498 cap info (non-null: cap entry), +0x4a0 PlayerCostumeInfo*,
+// +0x4a8 PlayerJointControlPartsDynamics*. Each model is PlayerFunction::initMarioModelActorCloset(
+// &e+0x4a8, actor, info, body, cap, const, state+0xc8, state+0xd4, state+0xe0, state+0xe8).
+// "MarioInvisible" entries use body = cap = "Mario". Afterwards we build Luigi models the same
+// way for the outfits the player owns (rs::isHaveCloth/isHaveCap), while the scene heap keeps
+// kMinFreeHeap free, and swap them into the entries for a P2 session.
+constexpr uintptr_t kEntryStride = 0x4b0;
+constexpr size_t kMinFreeHeap = 64u * 1024u * 1024u;
+struct PreviewSlot {
+    void* actor;
+    void* info;
+    void* dyn;
+};
+static u8* gState = nullptr;
+static PreviewSlot* gLuigiSlots = nullptr;
+static s32 gSlotCount = 0;
+static void* gLuigiFollowMtx = nullptr;  // state+0xe0 as left by the Luigi models
+static bool gSwapped = false;
+
+static size_t SceneHeapFree() {
+    sead::Heap* heap = al::getSceneHeap();
+    if (heap == nullptr) return 0;
+    using FreeFn = size_t (*)(sead::Heap*);
+    return (*reinterpret_cast<FreeFn**>(heap))[15](heap);
+}
+
+static void SwapEntries() {
+    if (gState == nullptr || gLuigiSlots == nullptr) return;
+    u8* arr = Field<u8*>(gState, 0x1a0);
+    for (s32 i = 0; i < gSlotCount; i++) {
+        PreviewSlot& s = gLuigiSlots[i];
+        if (s.actor == nullptr) continue;
+        u8* e = arr + i * kEntryStride;
+        PreviewSlot m{Field<void*>(e, 0x58), Field<void*>(e, 0x4a0), Field<void*>(e, 0x4a8)};
+        SetField(e, 0x58, s.actor);
+        SetField(e, 0x4a0, s.info);
+        SetField(e, 0x4a8, s.dyn);
+        s = m;
+    }
+    void* f = Field<void*>(gState, 0xe0);
+    SetField(gState, 0xe0, gLuigiFollowMtx);
+    gLuigiFollowMtx = f;
+    gSwapped = !gSwapped;
+}
+
+static void SetLuigiPreview(bool on) {
+    if (on != gSwapped) SwapEntries();
+}
+
+static void Reset() {
+    gState = nullptr;
+    gLuigiSlots = nullptr;
+    gSlotCount = 0;
+    gSwapped = false;
+}
 }  // namespace coop::closet
+
+// Game functions used by the Luigi preview (signatures from the 1.0.0 symbols).
+extern void* GameCreateMarioConst(const char*) asm("_ZN14PlayerFunction16createMarioConstEPKc");
+extern void GameLiveActorCtor(void*, const char*) asm("_ZN2al9LiveActorC1EPKc");
+extern void* GameInitMarioModelActorCloset(void** dyn, void* actor, const al::ActorInitInfo& info,
+                                           const char* body, const char* cap, void* playerConst,
+                                           void* v0, void* v1, void* followMtx, void* mtx) asm(
+    "_ZN14PlayerFunction25initMarioModelActorClosetEPP31PlayerJointControlPartsDynamicsPN2al9LiveActorERKNS3_13ActorInitInfoEPKcSA_PK11PlayerConstPN4sead7Vector3IfEESH_PP30PlayerJointControlFollowMtxPtrPNSE_8Matrix34IfEE");
+extern void GameAccessorCtor(GameDataHolderWriter* out, const void* sceneObjHolder) asm(
+    "_ZN22GameDataHolderAccessorC1EPKN2al18IUseSceneObjHolderE");
+extern bool GameIsHaveCloth(GameDataHolderWriter acc, const char* name) asm(
+    "_ZN2rs11isHaveClothE22GameDataHolderAccessorPKc");
+extern bool GameIsHaveCap(GameDataHolderWriter acc, const char* name) asm(
+    "_ZN2rs9isHaveCapE22GameDataHolderAccessorPKc");
+
+HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
+    static void Callback(u8* state, const al::ActorInitInfo& info) {
+        using namespace coop::closet;
+        Orig(state, info);
+        gState = state;
+        gLuigiSlots = nullptr;
+        gSlotCount = 0;
+        gSwapped = false;
+        s32 p1Port = al::getPlayerControllerPort(0);
+        s32 p2Port = al::getPlayerControllerPort(1);
+        if (p2Port < 0 || p2Port == p1Port) return;  // no Luigi this stage
+
+        s32 n = coop::Field<s32>(state, 0x1a8);
+        u8* arr = coop::Field<u8*>(state, 0x1a0);
+        void* scene = coop::Field<void*>(state, 0x18);
+        if (n <= 0 || arr == nullptr || scene == nullptr) return;
+        GameDataHolderWriter acc{nullptr};
+        GameAccessorCtor(&acc, reinterpret_cast<u8*>(scene) + 0x20);
+
+        gLuigiSlots = static_cast<PreviewSlot*>(operator new(sizeof(PreviewSlot) * n));
+        std::memset(gLuigiSlots, 0, sizeof(PreviewSlot) * n);
+        gSlotCount = n;
+        void* marioFollow = coop::Field<void*>(state, 0xe0);
+        void* playerConst = GameCreateMarioConst("");
+        size_t before = SceneHeapFree();
+        s32 built = 0, skipped = 0;
+        coop::gLuigiCloset = true;
+        for (s32 i = 0; i < n; i++) {
+            u8* e = arr + i * kEntryStride;
+            const char* name = coop::Field<const char*>(e, 0x8);
+            if (name == nullptr) continue;
+            bool isBody = coop::Field<void*>(e, 0x278) != nullptr;
+            bool isCap = coop::Field<void*>(e, 0x498) != nullptr;
+            const char* body = "Mario";
+            const char* cap = "Mario";
+            if (std::strcmp(name, "MarioInvisible") != 0) {
+                if (isBody) body = name;
+                if (isCap) cap = name;
+            }
+            bool owned = std::strcmp(name, "Mario") == 0 ||
+                         (isBody && GameIsHaveCloth(acc, name)) ||
+                         (isCap && GameIsHaveCap(acc, name));
+            if (!owned) continue;
+            if (SceneHeapFree() < kMinFreeHeap) { skipped++; continue; }
+            void* actor = operator new(0x108);
+            GameLiveActorCtor(actor, "LuigiClosetModel");
+            void* dyn = nullptr;
+            void* ci = GameInitMarioModelActorCloset(&dyn, actor, info, body, cap, playerConst,
+                                                     state + 0xc8, state + 0xd4, state + 0xe0,
+                                                     state + 0xe8);
+            gLuigiSlots[i] = PreviewSlot{actor, ci, dyn};
+            built++;
+        }
+        coop::gLuigiCloset = false;
+        gLuigiFollowMtx = coop::Field<void*>(state, 0xe0);
+        coop::SetField(state, 0xe0, marioFollow);
+        COOP_LOG("Wardrobe: %d Luigi previews built (%d skipped for memory), heap %lu -> %lu KB",
+                 built, skipped, (unsigned long)(before / 1024),
+                 (unsigned long)(SceneHeapFree() / 1024));
+    }
+};
 
 HOOK_DEFINE_TRAMPOLINE(ClosetReceiveMsgHook) {
     static bool Callback(al::LiveActor* self, const al::SensorMsg* msg, al::HitSensor* other,
@@ -435,6 +576,7 @@ HOOK_DEFINE_TRAMPOLINE(ClosetReceiveMsgHook) {
         coop::gUiPortP2 = prev;
         if (r && al::isMsgBindInit(msg)) {
             coop::gClosetP2 = true;
+            coop::closet::SetLuigiPreview(true);
             COOP_LOG("Wardrobe: P2 session started");
         }
         return r;
@@ -453,6 +595,7 @@ HOOK_DEFINE_TRAMPOLINE(ClosetStateKillHook) {
         Orig(state);
         if (coop::gClosetP2) COOP_LOG("Wardrobe: P2 session ended");
         coop::gClosetP2 = false;
+        coop::closet::SetLuigiPreview(false);
     }
 };
 
@@ -1517,7 +1660,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(ResourceSystem_findResourceCategory,
                          ResourceSystem_findResourceCategory_bytes) &&
               CheckBytes(ResourceSystem_createResource, ResourceSystem_createResource_bytes) &&
-              CheckBytes(rs_tryChangeNextStage, rs_tryChangeNextStage_bytes);
+              CheckBytes(rs_tryChangeNextStage, rs_tryChangeNextStage_bytes) &&
+              CheckBytes(StageSceneStateCloset_initModel, StageSceneStateCloset_initModel_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1564,6 +1708,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     FindResourceCategoryHook::InstallAtOffset(ResourceSystem_findResourceCategory);
     CreateResourceHook::InstallAtOffset(ResourceSystem_createResource);
     TryChangeNextStageHook::InstallAtOffset(rs_tryChangeNextStage);
+    ClosetInitModelHook::InstallAtOffset(StageSceneStateCloset_initModel);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

@@ -297,6 +297,9 @@ constexpr u64 ResourceSystem_createResource_bytes = 0xa9015ff8f81b0ffcULL;
 // rs::tryChangeNextStage(GameDataHolder*, al::Scene*) -> bool
 constexpr ptrdiff_t rs_tryChangeNextStage = 0x4d2c54;
 constexpr u64 rs_tryChangeNextStage_bytes = 0xa9024ff4d10103ffULL;
+// StageSceneStateCloset::initModel(const al::ActorInitInfo&)
+constexpr ptrdiff_t StageSceneStateCloset_initModel = 0x4d5560;
+constexpr u64 StageSceneStateCloset_initModel_bytes = 0xa9026ffcd10203ffULL;
 constexpr u64 al_findResource_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t CounterLifeCtrl_normalLayout = 0x18;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;
