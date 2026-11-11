@@ -62,17 +62,18 @@ static bool RayHit(const al::LiveActor* user, const sead::Vector3f& from, const 
     return alCollisionUtil::getHitPosOnArrow(col, hit, from, arrow, nullptr, nullptr);
 }
 
-static const al::IUseAreaObj* P1AreaUser() {
-    return reinterpret_cast<const al::IUseAreaObj*>(reinterpret_cast<const u8*>(gP1) +
+static const al::IUseAreaObj* AreaUser(const al::LiveActor* a) {
+    return reinterpret_cast<const al::IUseAreaObj*>(reinterpret_cast<const u8*>(a) +
                                                     smo100::LiveActor_IUseAreaObj);
 }
 
-// Find a safe spot beside P1: right, left, behind, front; each must have no wall between P1 and the
-// spot and must have ground within 600 units below it. Falls back to P1's own position.
-static sead::Vector3f FindSpotBesideP1() {
-    const sead::Vector3f p1 = al::getTrans(gP1);
+// Find a safe spot beside `anchor`: right, left, behind, front; each must have no wall between the
+// anchor and the spot, ground within 600 units below it, and not be inside a death area.
+// Falls back to the anchor's own position.
+static sead::Vector3f FindSpotBeside(al::LiveActor* anchor) {
+    const sead::Vector3f p1 = al::getTrans(anchor);
     sead::Vector3f side;
-    al::calcSideDir(&side, gP1);
+    al::calcSideDir(&side, anchor);
     const sead::Vector3f dirs[4] = {{side.x, 0, side.z},
                                     {-side.x, 0, -side.z},
                                     {side.z, 0, -side.x},
@@ -82,16 +83,45 @@ static sead::Vector3f FindSpotBesideP1() {
         sead::Vector3f eye = {p1.x, p1.y + 60.0f, p1.z};
         sead::Vector3f toSpot = {d.x * dist, 0.0f, d.z * dist};
         sead::Vector3f tmp;
-        if (RayHit(gP1, eye, toSpot, &tmp)) continue;  // wall in the way
+        if (RayHit(anchor, eye, toSpot, &tmp)) continue;  // wall in the way
         sead::Vector3f top = {p1.x + toSpot.x, p1.y + 150.0f, p1.z + toSpot.z};
         sead::Vector3f down = {0.0f, -600.0f, 0.0f};
         sead::Vector3f ground;
-        if (!RayHit(gP1, top, down, &ground)) continue;  // no floor (ledge / pit)
+        if (!RayHit(anchor, top, down, &ground)) continue;  // no floor (ledge / pit)
         sead::Vector3f spot = {ground.x, ground.y + 5.0f, ground.z};
-        if (al::isInDeathArea(P1AreaUser(), spot)) continue;  // floor is inside a pit/kill volume
+        if (al::isInDeathArea(AreaUser(anchor), spot)) continue;  // floor is inside a kill volume
         return spot;
     }
     return {p1.x, p1.y + 5.0f, p1.z};
+}
+static sead::Vector3f FindSpotBesideP1() { return FindSpotBeside(gP1); }
+
+// Actor a player is currently capturing (nullptr if none).
+static al::LiveActor* HackActorOf(al::LiveActor* player) {
+    if (!player) return nullptr;
+    void* keeper = Field<void*>(player, smo100::PlayerActorHakoniwa_hackKeeper);
+    return keeper ? Field<al::LiveActor*>(keeper, smo100::PlayerHackKeeper_hackActor) : nullptr;
+}
+
+// ---- rescue bubble: reuse the game's own pit-recovery (verified in Ghidra) ----
+// checkDeathArea's recovery branch calls a local routine at main+0x4273f4 with
+// (player, player+0x148 HackCap, +0x1f8 carry keeper, +0x1f0 bind keeper, +0x200 equipment user,
+//  +0x3b8 PlayerStateAbyss). It cancels carry/bind/equip, prepares PlayerStateAbyss recovery and
+// switches the player to the Abyss nerve, which floats the player in the bubble to the safety
+// point (PlayerActorHakoniwa+0x270). We point the safety point beside the other brother first.
+static s32 gForcedRecovery[2] = {0, 0};  // frames during which isValid() is forced true
+static void StartBubbleTo(al::LiveActor* who, al::LiveActor* to, s32 whoIdx) {
+    using Fn = void (*)(al::LiveActor*, void*, void*, void*, void*, void*);
+    auto fn = reinterpret_cast<Fn>(exl::util::modules::GetTargetStart() + smo100::PlayerRecoveryStart);
+    auto* sp = Field<PlayerRecoverySafetyPoint*>(who, smo100::PlayerActorHakoniwa_safetyPoint);
+    sead::Vector3f spot = FindSpotBeside(to);
+    sead::Vector3f up = {0.0f, 1.0f, 0.0f};
+    sp->setSafetyPoint(spot, up, nullptr);
+    gForcedRecovery[whoIdx] = 60 * 10;
+    fn(who, Field<void*>(who, 0x148), Field<void*>(who, 0x1f8), Field<void*>(who, 0x1f0),
+       Field<void*>(who, 0x200), Field<void*>(who, 0x3b8));
+    COOP_LOG("Bubble: P%d left behind, floating to P%d at (%.0f, %.0f, %.0f)", whoIdx + 1,
+             2 - whoIdx, spot.x, spot.y, spot.z);
 }
 
 static void PlaceP2BesideP1(const char* why) {
@@ -285,11 +315,20 @@ HOOK_DEFINE_TRAMPOLINE(HitPointOneHook) {
 HOOK_DEFINE_TRAMPOLINE(SafetyPointValidHook) {
     static bool Callback(PlayerRecoverySafetyPoint* sp) {
         auto* owner = coop::Field<al::LiveActor*>(sp, smo100::PlayerRecoverySafetyPoint_player);
-        if (coop::gP2 == nullptr || coop::gP1 == nullptr || owner != coop::gP2) return Orig(sp);
-        sead::Vector3f spot = coop::FindSpotBesideP1();
+        if (coop::gP2 == nullptr || coop::gP1 == nullptr) return Orig(sp);
         sead::Vector3f up = {0.0f, 1.0f, 0.0f};
-        sp->setSafetyPoint(spot, up, nullptr);
-        return true;
+        if (owner == coop::gP2) {
+            sead::Vector3f spot = coop::FindSpotBeside(coop::gP1);
+            sp->setSafetyPoint(spot, up, nullptr);
+            return true;
+        }
+        if (owner == coop::gP1 && coop::gForcedRecovery[0] > 0) {
+            // P1 is being bubbled to P2 by the co-op camera rule
+            sead::Vector3f spot = coop::FindSpotBeside(coop::gP2);
+            sp->setSafetyPoint(spot, up, nullptr);
+            return true;
+        }
+        return Orig(sp);
     }
 };
 
@@ -311,10 +350,17 @@ HOOK_DEFINE_TRAMPOLINE(SeeOddSpaceHook) {
 //    right after, so the zoomed camera is still kept out of walls.
 namespace coop::cam {
 constexpr float kZoomStart = 500.0f;   // separation where zoom-out begins
-constexpr float kZoomFull = 3000.0f;   // separation where zoom-out is at maximum
+constexpr float kZoomFull = 2000.0f;   // separation where zoom-out is at maximum
+constexpr float kLeaderSep = 2000.0f;  // split-up distance: camera picks the leader
+constexpr float kLeaderRelease = 1500.0f;  // back together: shared view again
+constexpr float kBubbleSep = 3000.0f;  // left-behind brother is bubbled to the leader
+constexpr s32 kBubbleDelay = 30;       // frames past kBubbleSep before bubbling
+constexpr s32 kBubbleCooldown = 60 * 4;
 constexpr float kZoomMax = 1.9f;       // max distance multiplier
-constexpr float kLerp = 0.08f;         // per-frame smoothing
-constexpr float kShareEnd = 5000.0f;   // by this separation the camera is fully on the leader
+constexpr float kLerp = 0.08f;         // per-frame smoothing (zoom)
+constexpr float kShareLerp = 0.12f;    // per-frame smoothing (who the camera looks at)
+static s32 gFarFrames = 0;
+static s32 gBubbleCooldown = 0;
 static float gZoom = 1.0f;
 static float gShare = 0.0f;            // 0 = P1, 0.5 = midpoint, 1 = P2
 
@@ -344,6 +390,8 @@ static float Dist(const sead::Vector3f& a, const sead::Vector3f& b) {
 }
 static void Reset() {
     gZoom = 1.0f; gShare = 0.0f; gMoveP1 = gMoveP2 = 0.0f; gHavePrev = false; gLeader = -1;
+    gFarFrames = 0; gBubbleCooldown = 0;
+    coop::gForcedRecovery[0] = coop::gForcedRecovery[1] = 0;
 }
 // called once per frame from StageSceneControl
 static void Update() {
@@ -361,12 +409,29 @@ static void Update() {
 
     sead::Vector3f d;
     float sep = Separation(&d);
-    if (gLeader < 0 && sep > kZoomFull) {
+    if (gLeader < 0 && sep > kLeaderSep) {
         gLeader = gMoveP2 > gMoveP1 ? 1 : 0;
         COOP_LOG("Camera: brothers split up, following P%d", gLeader + 1);
-    } else if (gLeader >= 0 && sep < kZoomFull * 0.8f) {
+    } else if (gLeader >= 0 && sep < kLeaderRelease) {
         gLeader = -1;
         COOP_LOG("Camera: brothers back together, sharing view");
+    }
+
+    // 3D World: whoever is left behind off-screen is bubbled to the leader.
+    for (s32 i = 0; i < 2; i++)
+        if (coop::gForcedRecovery[i] > 0) coop::gForcedRecovery[i]--;
+    if (gBubbleCooldown > 0) gBubbleCooldown--;
+    gFarFrames = (gLeader >= 0 && sep > kBubbleSep) ? gFarFrames + 1 : 0;
+    if (gFarFrames > kBubbleDelay && gBubbleCooldown == 0) {
+        s32 behind = gLeader == 1 ? 0 : 1;
+        al::LiveActor* who = behind == 0 ? coop::gP1 : coop::gP2;
+        al::LiveActor* to = behind == 0 ? coop::gP2 : coop::gP1;
+        if (coop::HackActorOf(who) == nullptr && coop::HackActorOf(to) == nullptr &&
+            rs::isPlayerOnGround(to)) {
+            coop::StartBubbleTo(who, to, behind);
+            gBubbleCooldown = kBubbleCooldown;
+            gFarFrames = 0;
+        }
     }
 }
 }  // namespace coop::cam
@@ -377,12 +442,10 @@ HOOK_DEFINE_TRAMPOLINE(CameraTargetHook) {
         using namespace coop::cam;
         if (!Active()) { gShare = 0.0f; return; }
         sead::Vector3f d;
-        float sep = Separation(&d);
-        // share the view 50/50 up to kZoomFull, then move onto the leader by kShareEnd
-        float toLeader = Clamp01((sep - kZoomFull) / (kShareEnd - kZoomFull));
-        float leaderShare = gLeader == 1 ? 1.0f : 0.0f;
-        float want = gLeader < 0 ? 0.5f : 0.5f + (leaderShare - 0.5f) * toLeader;
-        gShare += (want - gShare) * kLerp;
+        Separation(&d);
+        // together: look at the midpoint; split up: look at the leader (switches in ~0.5 s)
+        float want = gLeader < 0 ? 0.5f : (gLeader == 1 ? 1.0f : 0.0f);
+        gShare += (want - gShare) * kShareLerp;
         out->x += d.x * gShare;
         out->y += d.y * gShare;
         out->z += d.z * gShare;
@@ -463,7 +526,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(PlayerRecoverySafetyPoint_isValid, PlayerRecoverySafetyPoint_isValid_bytes) &&
               CheckBytes(rs_isPlayerEnableToSeeOddSpace, rs_isPlayerEnableToSeeOddSpace_bytes) &&
               CheckBytes(PlayerCameraTarget_calcTrans, PlayerCameraTarget_calcTrans_bytes) &&
-              CheckBytes(CameraPoser_makeLookAtCamera, CameraPoser_makeLookAtCamera_bytes);
+              CheckBytes(CameraPoser_makeLookAtCamera, CameraPoser_makeLookAtCamera_bytes) &&
+              CheckBytes(PlayerRecoveryStart, PlayerRecoveryStart_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -484,7 +548,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     SeeOddSpaceHook::InstallAtOffset(rs_isPlayerEnableToSeeOddSpace);
     CameraTargetHook::InstallAtOffset(PlayerCameraTarget_calcTrans);
     MakeLookAtHook::InstallAtOffset(CameraPoser_makeLookAtCamera);
-    COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera).");
+    COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
 extern "C" NORETURN void exl_exception_entry() {

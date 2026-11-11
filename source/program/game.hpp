@@ -133,6 +133,12 @@ constexpr u64 CameraPoser_makeLookAtCamera_bytes = 0x2a1f03e0d65f03c0ULL;
 constexpr ptrdiff_t LookAtCamera_pos = 0x38;
 constexpr ptrdiff_t LookAtCamera_at = 0x44;
 
+// Rescue bubble (verified in Ghidra): local routine called from checkDeathArea's recovery branch
+// with (player, +0x148, +0x1f8, +0x1f0, +0x200, +0x3b8); player+0x270 = PlayerRecoverySafetyPoint.
+constexpr ptrdiff_t PlayerRecoveryStart = 0x4273f4;
+constexpr u64 PlayerRecoveryStart_bytes = 0xa90157f6a9bc5ff8ULL;
+constexpr ptrdiff_t PlayerActorHakoniwa_safetyPoint = 0x270;
+
 constexpr ptrdiff_t PlayerFunction_isPlayerHitPointOne = 0x447bdc;
 constexpr u64 PlayerFunction_isPlayerHitPointOne_bytes = 0xa9017bfdd10083ffULL;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_isValid = 0x460c90;
