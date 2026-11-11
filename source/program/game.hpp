@@ -53,6 +53,7 @@ class HitSensor;
 LiveActor* getSensorHost(const HitSensor* sensor);  // 0x8f1ec0
 class SensorMsg;
 bool isMsgBindInit(const SensorMsg* msg);          // 0x8f96e4
+bool isMsgBindStart(const SensorMsg* msg);         // 0x8f965c
 sead::Heap* getSceneHeap();                        // 0x936e78
 class IUseNerve;
 class Nerve;
@@ -78,6 +79,7 @@ namespace rs {
 // it dereferences actor+0x78 (al::Collider), which players don't have -> null crash.
 bool isPlayerOnGround(const al::LiveActor* actor);
 bool isInChangeStageArea(const al::LiveActor* actor, const sead::Vector3f* pos);  // 0x544de0
+bool isActiveDemo(const al::LiveActor* actor);  // 0x5508d4
 }  // namespace rs
 
 namespace GameDataFunction {
@@ -272,7 +274,13 @@ constexpr ptrdiff_t Closet_receiveMsg = 0x24e8f0;
 constexpr u64 Closet_receiveMsg_bytes = 0xa90157f6fc1c0fe8ULL;
 constexpr ptrdiff_t Closet_attackSensor = 0x24eaac;  // (HitSensor* own, HitSensor* other)
 constexpr u64 Closet_attackSensor_bytes = 0xa9017bfda9be4ff4ULL;
-constexpr ptrdiff_t Closet_isPlayerStart = 0x118;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr ptrdiff_t Closet_isPlayerStart = 0x118;
+// EventFlowNodeMessageBalloon::exeWait() (NPC talk balloon / talk start), node+0x18 = actor
+constexpr ptrdiff_t EventFlowNodeMessageBalloon_exeWait = 0x1b79ec;
+constexpr u64 EventFlowNodeMessageBalloon_exeWait_bytes = 0xfd0013e8d10143ffULL;
+// rs::tryLockStartEventTalkDemo(al::EventFlowNode*) -> bool
+constexpr ptrdiff_t rs_tryLockStartEventTalkDemo = 0x55a118;
+constexpr u64 rs_tryLockStartEventTalkDemo_bytes = 0xa9017bfdf81e0ff3ULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;

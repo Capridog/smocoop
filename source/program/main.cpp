@@ -37,7 +37,9 @@ static char gP2Costume[64] = {};
 static char gP2CapName[64] = {};
 static bool gClosetP2 = false;   // P2 is using the wardrobe right now (Closet bind -> state kill)
 static bool gUiPortP2 = false;   // al::getMainControllerPort answers P2's port
-static bool gLuigiCloset = false;  // building the wardrobe's Luigi preview models right now
+static bool gLuigiCloset = false;
+static bool gTalkP2 = false;       // P2 started the current NPC talk (UI follows P2's controller)
+static s32 gTalkNoDemoFrames = 0;  // building the wardrobe's Luigi preview models right now
 
 template <typename T>
 static T Field(const void* base, ptrdiff_t off) {
@@ -59,6 +61,8 @@ static void ResetStageState() {
     gP2RespawnPending = false;
     gGameOver = false;
     gForceP1Death = false;
+    gTalkP2 = false;
+    gTalkNoDemoFrames = 0;
 }
 
 // Actor P2 is currently capturing (nullptr if none).
@@ -579,6 +583,11 @@ HOOK_DEFINE_TRAMPOLINE(ClosetReceiveMsgHook) {
         bool r = Orig(self, msg, other, own);
         coop::gUiPortP2 = prev;
         coop::gToucherIsP2 = prevT;
+        static s32 sLogBudget = 40;
+        if (al::isMsgBindStart(msg) && sLogBudget > 0) {
+            sLogBudget--;
+            COOP_LOG("Wardrobe: P2 BindStart -> %d", (int)r);
+        }
         if (r && al::isMsgBindInit(msg)) {
             coop::gClosetP2 = true;
             coop::closet::SetLuigiPreview(true);
@@ -605,9 +614,50 @@ HOOK_DEFINE_TRAMPOLINE(ClosetAttackSensorHook) {
     }
 };
 
+// ------------------------------------------------------------------------ NPC talk for P2
+// Ghidra: EventFlowNodeMessageBalloon::exeWait (0x1b79ec) decides whether a talk starts from
+// player 0's view: rs::getPlayerPos(npc), rs::isPlayerEnableTalkGround/Swim(npc),
+// rs::isPlayerInputTriggerStartTalk(npc) (player 0's own input port), then
+// rs::tryLockStartEventTalkDemo(node) (0x55a118). When P2 is closer to the NPC than P1, run it
+// from P2's view; if the talk locks, the talk UI follows P2's controller until the demo ends.
+static float Dist2(const al::LiveActor* a, const al::LiveActor* b) {
+    const sead::Vector3f& p = al::getTrans(a);
+    const sead::Vector3f& q = al::getTrans(b);
+    float dx = p.x - q.x, dy = p.y - q.y, dz = p.z - q.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+HOOK_DEFINE_TRAMPOLINE(TalkBalloonWaitHook) {
+    static void Callback(u8* node) {
+        al::LiveActor* npc = coop::Field<al::LiveActor*>(node, 0x18);
+        if (coop::gP1 == nullptr || coop::gP2 == nullptr || npc == nullptr || coop::gTalkP2 ||
+            Dist2(coop::gP2, npc) >= Dist2(coop::gP1, npc))
+            return Orig(node);
+        bool prevT = coop::gToucherIsP2, prevU = coop::gUiPortP2;
+        coop::gToucherIsP2 = true;
+        coop::gUiPortP2 = true;
+        Orig(node);
+        coop::gToucherIsP2 = prevT;
+        coop::gUiPortP2 = prevU;
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(TryLockTalkDemoHook) {
+    static bool Callback(void* node) {
+        bool r = Orig(node);
+        if (r && coop::gToucherIsP2 && coop::gP2 != nullptr) {
+            coop::gTalkP2 = true;
+            coop::gTalkNoDemoFrames = 0;
+            COOP_LOG("Talk: P2 started a conversation");
+        }
+        return r;
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
-        if ((coop::gUiPortP2 || coop::gClosetP2) && coop::gP2Port >= 0) return coop::gP2Port;
+        if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
+            return coop::gP2Port;
         return Orig();
     }
 };
@@ -1607,6 +1657,15 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
         coop::cam::Update();
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return;
 
+        if (coop::gTalkP2) {
+            if (rs::isActiveDemo(coop::gP1)) {
+                coop::gTalkNoDemoFrames = 0;
+            } else if (++coop::gTalkNoDemoFrames > 10) {
+                coop::gTalkP2 = false;
+                COOP_LOG("Talk: P2 conversation ended");
+            }
+        }
+
         if (coop::gP2RespawnPending) {
             coop::gP2RespawnPending = false;
             coop::gP2Hp = coop::kP2MaxHp;
@@ -1684,7 +1743,10 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(ResourceSystem_createResource, ResourceSystem_createResource_bytes) &&
               CheckBytes(rs_tryChangeNextStage, rs_tryChangeNextStage_bytes) &&
               CheckBytes(StageSceneStateCloset_initModel, StageSceneStateCloset_initModel_bytes) &&
-              CheckBytes(Closet_attackSensor, Closet_attackSensor_bytes);
+              CheckBytes(Closet_attackSensor, Closet_attackSensor_bytes) &&
+              CheckBytes(EventFlowNodeMessageBalloon_exeWait,
+                         EventFlowNodeMessageBalloon_exeWait_bytes) &&
+              CheckBytes(rs_tryLockStartEventTalkDemo, rs_tryLockStartEventTalkDemo_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1733,6 +1795,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     TryChangeNextStageHook::InstallAtOffset(rs_tryChangeNextStage);
     ClosetInitModelHook::InstallAtOffset(StageSceneStateCloset_initModel);
     ClosetAttackSensorHook::InstallAtOffset(Closet_attackSensor);
+    TalkBalloonWaitHook::InstallAtOffset(EventFlowNodeMessageBalloon_exeWait);
+    TryLockTalkDemoHook::InstallAtOffset(rs_tryLockStartEventTalkDemo);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
