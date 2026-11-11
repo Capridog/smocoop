@@ -374,12 +374,13 @@ constexpr float kZoomFull = 2000.0f;   // separation where zoom-out is at maximu
 constexpr float kLeaderSep = 2000.0f;  // split-up distance: camera picks the leader
 constexpr float kLeaderRelease = 1500.0f;  // back together: shared view again
 constexpr float kBubbleSep = 1500.0f;  // minimum separation for a bubble (never when close)
-constexpr s32 kBubbleDelay = 45;       // frames the brother must stay off-screen first
-constexpr s32 kBubbleCooldown = 60 * 4;
+constexpr s32 kBubbleDelay = 2;        // frames off-screen before bubbling (noise filter only)
+constexpr s32 kBubbleCooldown = 90;    // ~1.5 s: lets the bubble arrive before re-checking
 constexpr float kZoomMax = 1.9f;       // max distance multiplier
 constexpr float kLerp = 0.08f;         // per-frame smoothing (zoom)
 constexpr float kShareLerp = 0.12f;    // per-frame smoothing (who the camera looks at)
 static s32 gFarFrames = 0;
+static s32 gFarIdx = -1;
 static s32 gBubbleCooldown = 0;
 static float gZoom = 1.0f;
 static float gShare = 0.0f;            // 0 = P1, 0.5 = midpoint, 1 = P2
@@ -456,20 +457,23 @@ static void Update() {
     for (s32 i = 0; i < 2; i++)
         if (coop::gForcedRecovery[i] > 0) coop::gForcedRecovery[i]--;
     if (gBubbleCooldown > 0) gBubbleCooldown--;
-    // only bubble the brother left behind when he is actually off-screen
-    bool behindOffScreen = false;
-    if (gLeader >= 0 && sep > kBubbleSep)
-        behindOffScreen = IsOffScreen(gLeader == 1 ? coop::gP1 : coop::gP2);
-    gFarFrames = behindOffScreen ? gFarFrames + 1 : 0;
-    if (gFarFrames > kBubbleDelay && gBubbleCooldown == 0) {
-        s32 behind = gLeader == 1 ? 0 : 1;
-        al::LiveActor* who = behind == 0 ? coop::gP1 : coop::gP2;
-        al::LiveActor* to = behind == 0 ? coop::gP2 : coop::gP1;
-        if (coop::HackActorOf(who) == nullptr && coop::HackActorOf(to) == nullptr &&
-            rs::isPlayerOnGround(to)) {
-            coop::gBubbleRequest[behind] = true;
-            coop::gForcedRecovery[behind] = 60 * 10;
-            COOP_LOG("Bubble requested for P%d", behind + 1);
+    // As soon as one brother is off-screen (and the other is on-screen), bubble him to the other.
+    // A 2-frame confirmation only filters single-frame projection noise (~0.03 s).
+    s32 offIdx = -1;
+    if (sep > kBubbleSep) {
+        bool off1 = IsOffScreen(coop::gP1), off2 = IsOffScreen(coop::gP2);
+        if (off1 != off2) offIdx = off1 ? 0 : 1;
+    }
+    gFarFrames = (offIdx >= 0 && offIdx == gFarIdx) ? gFarFrames + 1 : (offIdx >= 0 ? 1 : 0);
+    gFarIdx = offIdx;
+    if (offIdx >= 0 && gFarFrames >= kBubbleDelay && gBubbleCooldown == 0 &&
+        !coop::gBubbleRequest[offIdx]) {
+        al::LiveActor* who = offIdx == 0 ? coop::gP1 : coop::gP2;
+        al::LiveActor* to = offIdx == 0 ? coop::gP2 : coop::gP1;
+        if (coop::HackActorOf(who) == nullptr && coop::HackActorOf(to) == nullptr) {
+            coop::gBubbleRequest[offIdx] = true;
+            coop::gForcedRecovery[offIdx] = 60 * 10;
+            COOP_LOG("Bubble requested for P%d (off-screen)", offIdx + 1);
             gBubbleCooldown = kBubbleCooldown;
             gFarFrames = 0;
         }
