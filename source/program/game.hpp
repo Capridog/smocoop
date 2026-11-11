@@ -249,6 +249,10 @@ constexpr u64 al_findOrCreateActorResourceWithAnimResource_bytes = 0xf9009bfcd10
 // al::ResourceSystem::findOrCreateResource(const sead::SafeString& name, const char* ext)
 constexpr ptrdiff_t ResourceSystem_findOrCreateResource = 0xa7d894;
 constexpr u64 ResourceSystem_findOrCreateResource_bytes = 0xa9014ff4f81d0ff5ULL;
+// al::findResource(const sead::SafeString&). rs::createPlayerSklRetargettingInfo (0x56f520)
+// formats "ObjectData/%s" with al::getModelName(actor) and reads ->+0xb8 without a null check.
+constexpr ptrdiff_t al_findResource = 0x9cb4e0;
+constexpr u64 al_findResource_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t CounterLifeCtrl_normalLayout = 0x18;
 constexpr ptrdiff_t PlayerRecoverySafetyPoint_endRecovery = 0x4613a8;
 constexpr u64 PlayerRecoverySafetyPoint_endRecovery_bytes = 0xa9017bfdf81e0ff3ULL;

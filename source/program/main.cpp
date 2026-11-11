@@ -269,6 +269,27 @@ static const char* Redirect(const char* name) {
     return out;
 }
 
+// A Luigi actor's model name is "P2Luigi<X>", and some code rebuilds "ObjectData/<model name>"
+// from it (e.g. rs::createPlayerSklRetargettingInfo -> al::findResource). Those files live in
+// the P2Luigi folder: "ObjectData/P2Luigi<X>" -> "ObjectData/P2Luigi/P2Luigi<X>". Any time.
+static const char* FixFolder(const char* name) {
+    if (name == nullptr) return nullptr;
+    constexpr const char kPre[] = "ObjectData/P2Luigi";
+    constexpr size_t n = sizeof(kPre) - 1;
+    if (std::strncmp(name, kPre, n) != 0 || name[n] == '/') return nullptr;
+    size_t len = std::strlen(name);
+    if (len + 9 > sizeof(gBuf[0])) return nullptr;
+    char* out = gBuf[gBufIdx++ & 7];
+    std::memcpy(out, "ObjectData/P2Luigi/", 19);
+    std::memcpy(out + 19, name + 11, len - 11 + 1);
+    return out;
+}
+
+static const char* Rename(const char* name) {
+    const char* r = Redirect(name);
+    return r ? r : FixFolder(name);
+}
+
 struct SafeStr {  // sead::SafeStringBase<char>: vtable, mStringTop
     void* vtable;
     const char* str;
@@ -277,7 +298,7 @@ struct SafeStr {  // sead::SafeStringBase<char>: vtable, mStringTop
 
 HOOK_DEFINE_TRAMPOLINE(FindOrCreateActorResourceHook) {
     static void* Callback(void* holder, const char* name, const char* suffix) {
-        const char* r = coop::luigi::Redirect(name);
+        const char* r = coop::luigi::Rename(name);
         return Orig(holder, r ? r : name, suffix);
     }
 };
@@ -285,18 +306,27 @@ HOOK_DEFINE_TRAMPOLINE(FindOrCreateActorResourceHook) {
 HOOK_DEFINE_TRAMPOLINE(FindOrCreateActorResourceAnimHook) {
     static void* Callback(void* holder, const char* name, const char* animArc, const char* suffix,
                           bool isMergeAnim) {
-        const char* r = coop::luigi::Redirect(name);
-        const char* ra = coop::luigi::Redirect(animArc);
+        const char* r = coop::luigi::Rename(name);
+        const char* ra = coop::luigi::Rename(animArc);
         return Orig(holder, r ? r : name, ra ? ra : animArc, suffix, isMergeAnim);
     }
 };
 
 HOOK_DEFINE_TRAMPOLINE(ResourceFindOrCreateHook) {
     static void* Callback(void* system, const coop::luigi::SafeStr* name, const char* ext) {
-        const char* r = name ? coop::luigi::Redirect(name->str) : nullptr;
+        const char* r = name ? coop::luigi::Rename(name->str) : nullptr;
         if (r == nullptr) return Orig(system, name, ext);
         coop::luigi::SafeStr renamed{name->vtable, r};
         return Orig(system, &renamed, ext);
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(FindResourceHook) {
+    static void* Callback(const coop::luigi::SafeStr* name) {
+        const char* r = name ? coop::luigi::Rename(name->str) : nullptr;
+        if (r == nullptr) return Orig(name);
+        coop::luigi::SafeStr renamed{name->vtable, r};
+        return Orig(&renamed);
     }
 };
 
@@ -1294,7 +1324,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_findOrCreateActorResource, al_findOrCreateActorResource_bytes) &&
               CheckBytes(al_findOrCreateActorResourceWithAnimResource,
                          al_findOrCreateActorResourceWithAnimResource_bytes) &&
-              CheckBytes(ResourceSystem_findOrCreateResource, ResourceSystem_findOrCreateResource_bytes);
+              CheckBytes(ResourceSystem_findOrCreateResource, ResourceSystem_findOrCreateResource_bytes) &&
+              CheckBytes(al_findResource, al_findResource_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1329,6 +1360,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     FindOrCreateActorResourceHook::InstallAtOffset(al_findOrCreateActorResource);
     FindOrCreateActorResourceAnimHook::InstallAtOffset(al_findOrCreateActorResourceWithAnimResource);
     ResourceFindOrCreateHook::InstallAtOffset(ResourceSystem_findOrCreateResource);
+    FindResourceHook::InstallAtOffset(al_findResource);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
