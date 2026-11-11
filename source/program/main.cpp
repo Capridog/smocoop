@@ -431,7 +431,7 @@ HOOK_DEFINE_TRAMPOLINE(SafetyPointValidHook) {
 namespace coop::echo {
 constexpr s32 kDelay = 25;
 constexpr s32 kSlots = 38;
-enum Kind : u8 { K0, KVec3, KQuat, KStr, KFloat, KVec3Int };
+enum Kind : u8 { K0, KVec3, KQuat, KStr, KFloat, KVec3Int, KFlags2D };
 struct Entry { u32 frame; u16 slot; Kind kind; float f[4]; s32 i; const char* str; void* strVptr; };
 struct SafeStr { void* vptr; const char* str; };
 static Entry gQ[1024];
@@ -447,6 +447,25 @@ static s32 gDepth = 0;
 
 static bool Active() { return gLeader >= 0; }
 static s32 LeaderIdx() { return gLeader; }
+
+// 2D sections: the pipe switches the player between 3D and 2D with PuppetFunction2D3D helpers,
+// which are not virtual calls but plain flag writes (verified in Ghidra): validate2D ->
+// *(puppet+0x28)+0x8, keepOn2D/endKeepOn2D -> *(puppet+0x28)+0xb, snap2D -> puppet+0xae.
+// They are sampled on the leader every frame and replayed like the other calls.
+static s32 gLastFlags = -1;
+static s32 ReadFlags2D(void* pup) {
+    void* dim = coop::Field<void*>(pup, 0x28);
+    if (dim == nullptr) return -1;
+    return coop::Field<u8>(dim, 0x8) | (coop::Field<u8>(dim, 0xb) << 8) |
+           (coop::Field<u8>(pup, 0xae) << 16);
+}
+static void WriteFlags2D(void* pup, s32 flags) {
+    void* dim = coop::Field<void*>(pup, 0x28);
+    if (dim == nullptr || flags < 0) return;
+    coop::SetField<u8>(dim, 0x8, (u8)(flags & 0xff));
+    coop::SetField<u8>(dim, 0xb, (u8)((flags >> 8) & 0xff));
+    coop::SetField<u8>(pup, 0xae, (u8)((flags >> 16) & 0xff));
+}
 static bool IsBinding(void* pup) {
     return coop::Field<void*>(pup, 0x70) != nullptr && coop::Field<void*>(pup, 0x78) != nullptr;
 }
@@ -506,6 +525,7 @@ static void TStart(void* self, al::HitSensor* binder, al::HitSensor* player) {
     if (idx < 0 || !IsInStagePipeOrDoor(binder)) return;
     gLeader = idx; gStart = gFrame; gHead = gTail = 0;
     gFollowerStarted = false; gStartReq = false;
+    gLastFlags = ReadFlags2D(self);
     COOP_LOG("Pipe/door: P%d went in, P%d follows %d frames behind", idx + 1, 2 - idx, kDelay);
 }
 
@@ -554,6 +574,7 @@ static void Replay(const Entry& e, void* fp) {
         break;
     }
     case KFloat: ((void (*)(void*, float))gOrig[e.slot])(fp, e.f[0]); break;
+    case KFlags2D: WriteFlags2D(fp, e.i); break;
     case KVec3Int: ((void (*)(void*, const sead::Vector3f&, s32))gOrig[e.slot])(fp, v, e.i); break;
     }
 }
@@ -595,6 +616,14 @@ static void Update() {
         if (gFollowerStarted && fp && IsBinding(fp)) ((void (*)(void*))gOrig[1])(fp);
         End("timeout");
         return;
+    }
+    {
+        s32 flags = ReadFlags2D(gPup[gLeader]);
+        if (flags != gLastFlags) {
+            gLastFlags = flags;
+            if (Entry* e = Push(gPup[gLeader], 0xff, KFlags2D)) e->i = flags;
+            COOP_LOG("Pipe/door: leader 2D flags now %06x", flags);
+        }
     }
     if (!gFollowerStarted) {
         if (gFrame - gStart >= (u32)kDelay) gStartReq = true;
