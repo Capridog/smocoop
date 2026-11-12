@@ -13,3 +13,11 @@ Steps:
 4. `assign.py`: match each slot to a Luigi clip (MFCC + DTW, distinct clips within each voice
    group) -> `mapping.json`. Edit that file by hand to change any slot.
 5. `build.py`: write `P2LuigiPv.bfwar` (PCM16, loudness matched to Mario's clip per slot).
+
+## v2 mapping (anchored on 3D World Mario)
+Odyssey's Mario voice clips are mostly the same recordings as 3D World's Mario set, so
+`m2m.py` names the 3D World Mario files by matching them against Odyssey's slots. `align.py` /
+`align2.py` build Mario-vs-Luigi cost matrices (MFCC and pitch/energy contours), and `nw2.py` aligns
+the two archives in order (both sets keep the same line order). Each Odyssey slot then takes the
+Luigi clip aligned with its 3D World Mario clip; Odyssey-only lines (sleep, tired, cold) keep the
+direct match.
