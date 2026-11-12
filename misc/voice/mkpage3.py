@@ -3,6 +3,10 @@ def mp3(p):
     out=subprocess.run(['ffmpeg','-v','error','-i',p,'-ac','1','-ar','22050','-b:a','40k','-f','mp3','-'],capture_output=True).stdout
     return 'data:audio/mpeg;base64,'+base64.b64encode(out).decode()
 def dur(p): i=sf.info(p); return i.frames/i.samplerate
+ASR=json.load(open('asr.json'))
+def said(p):
+    t=ASR.get(p,{}).get('text','').strip()
+    return (' “'+(t[:24]+'…' if len(t)>24 else t)+'”') if t else ''
 names=json.load(open('pvnames.json')); groups=json.load(open('groups.json'))
 mapping={int(k):v for k,v in json.load(open('mapping.json')).items()}
 friendly={'vJump':'Jump (1st)','vJump2nd':'Jump (2nd)','vJump3rd':'Jump (3rd)','vJumpBroad':'Long jump','vJumpTurn':'Backflip / side flip','vJumpTurn2':'Backflip / side flip (2)',
@@ -17,13 +21,13 @@ def add(cid,label,group,path):
 for p in sorted(glob.glob('galaxy/Luigi/*/*.wav')+glob.glob('galaxy/Luigi/*/*/*.wav')):
     nm=os.path.basename(p).split(' - ')[-1][:-4]
     if 'No Label' in nm: nm='Unused '+os.path.basename(p).split(']')[0].split('[')[-1]
-    add('g:'+nm,'%s (%.1fs)'%(nm,dur(p)),'Super Mario Galaxy',p)
+    add('g:'+nm,'%s%s (%.1fs)'%(nm,said(p),dur(p)),'Super Mario Galaxy',p)
 for p in sorted(glob.glob('luigi_zip/*/*.wav')):
     k=os.path.basename(p).split('_')[-1][:-4].lstrip('0')
-    add('w:'+k,'3DW %s (%.1fs)'%(k,dur(p)),'Super Mario 3D World',p)
+    add('w:'+k,'3DW %s%s (%.1fs)'%(k,said(p),dur(p)),'Super Mario 3D World',p)
 for p in sorted(glob.glob('lm/Luigi/*American*/*.wav')+glob.glob('lm/Luigi/*American*/(Ending Cutscene)/*.wav'),key=lambda p:int(os.path.basename(p)[:-4])):
     k=os.path.basename(p)[:-4]; tag=' ending' if 'Ending' in p else ''
-    add('m:'+k,'LM %s%s (%.1fs)'%(k,tag,dur(p)),"Luigi's Mansion",p)
+    add('m:'+k,'LM %s%s%s (%.1fs)'%(k,tag,said(p),dur(p)),"Luigi's Mansion",p)
 mario={int(os.path.basename(p)[:3]):p for p in glob.glob('mario_wav/*.wav')}
 sug=json.load(open('suggest.json'))
 rows=[]
@@ -36,7 +40,7 @@ for s in sorted(mapping):
     cid=None
     if isinstance(v,str):
         b=os.path.basename(v); cid=('g:'+b.split(' - ')[-1][:-4]) if ' - ' in b else ('w:'+b.split('_')[-1][:-4].lstrip('0'))
-    rows.append(dict(slot=s,label=friendly.get(g,g or nm),name=nm,cur=cur,curId=cid,sug=[x for x in sug.get(str(s),[]) if x in clips],mario=mp3(mario[s]),now=mp3('slotwav/%03d.wav'%s)))
+    rows.append(dict(slot=s,label=friendly.get(g,g or nm),name=nm+'  ·  Mario: '+ASR.get(mario[s],{}).get('text','')[:30],cur=cur,curId=cid,sug=[x for x in sug.get(str(s),[]) if x in clips],mario=mp3(mario[s]),now=mp3('slotwav/%03d.wav'%s)))
 data=dict(clips=clips,rows=rows)
 tpl=open('page_tpl3.html').read()
 open('aud/luigi_voice_picker.html','w').write(tpl.replace('/*DATA*/',json.dumps(data)))

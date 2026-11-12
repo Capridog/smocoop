@@ -1,0 +1,2186 @@
+{
+"mario_wav/000_WsPvDummy.wav": {
+"text": "You",
+"nsp": 0.82
+},
+"mario_wav/001_WsrPvRcGetPrize.wav": {
+"text": "Yeah!",
+"nsp": 0.04
+},
+"mario_wav/002_WsPvOpeningStandUp_wander.wav": {
+"text": "Hm?",
+"nsp": 0.09
+},
+"mario_wav/003_WsPvOpeningStandUp_wander2.wav": {
+"text": "Hm?",
+"nsp": 0.22
+},
+"mario_wav/004_WsPvDemoMofumofuOpening2_FallLong.wav": {
+"text": "WAAAAAAH! WAAAAAAH!",
+"nsp": 0.02
+},
+"mario_wav/005_WsPvDamage00.wav": {
+"text": "Oh!",
+"nsp": 0.49
+},
+"mario_wav/006_WsPvDamage01.wav": {
+"text": "Woohoo!",
+"nsp": 0.22
+},
+"mario_wav/007_WsPvDamage02.wav": {
+"text": "Oh!",
+"nsp": 0.22
+},
+"mario_wav/008_WsPvDamage03.wav": {
+"text": "Ouch.",
+"nsp": 0.15
+},
+"mario_wav/009_WsPvDamage04.wav": {
+"text": "Ooh!",
+"nsp": 0.15
+},
+"mario_wav/010_WsPvDamageFireRun00.wav": {
+"text": "Ha-hoo-hoo, ha-dah-dah-dah-dah!",
+"nsp": 0.03
+},
+"mario_wav/011_WsPvDamageFireRun01.wav": {
+"text": "Ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow,",
+"nsp": 0.16
+},
+"mario_wav/012_WsPvDamageFireRun02.wav": {
+"text": "Yahoo! I got it! I got it! I got it! I got it! I got it! I got it! I got it! I got it! I got it!",
+"nsp": 0.3
+},
+"mario_wav/013_WsPvDamageInWater00.wav": {
+"text": "Woah!",
+"nsp": 0.41
+},
+"mario_wav/014_WsPvDamageInWater01.wav": {
+"text": "",
+"nsp": 1
+},
+"mario_wav/015_WsPvDamageInWater02.wav": {
+"text": "Woo!",
+"nsp": 0.35
+},
+"mario_wav/016_WsPvDamageLast00.wav": {
+"text": "Oh no!",
+"nsp": 0.01
+},
+"mario_wav/017_WsPvDamageLast01.wav": {
+"text": "Ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow, ow",
+"nsp": 0.12
+},
+"mario_wav/018_WsPvDamageLast02.wav": {
+"text": "Oh-ho-ho!",
+"nsp": 0.04
+},
+"mario_wav/019_WsPvDamageLastCrushed.wav": {
+"text": "Oh, oh, oh, oh.",
+"nsp": 0.11
+},
+"mario_wav/020_WsPvDamageLastInWater00.wav": {
+"text": "WOOHOOHOOHOOHOOHOOHOOHOOHOO!",
+"nsp": 0.1
+},
+"mario_wav/021_WsPvDamageLastInWater01.wav": {
+"text": "Oh, yay!",
+"nsp": 0.03
+},
+"mario_wav/022_WsPvDamageLastInWater02.wav": {
+"text": "Oh, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no, no.",
+"nsp": 0.08
+},
+"mario_wav/023_WsPvDamageLastPoison00.wav": {
+"text": "Ew!",
+"nsp": 0.02
+},
+"mario_wav/024_WsPvDamageLastPoison01.wav": {
+"text": "Oooooooh!",
+"nsp": 0.05
+},
+"mario_wav/025_WsPvDamageLastPoison02.wav": {
+"text": "Ewwww!",
+"nsp": 0.05
+},
+"mario_wav/026_WsPvDamageLastPoison03.wav": {
+"text": "Oh!",
+"nsp": 0.05
+},
+"mario_wav/027_WsPvDeadFall00.wav": {
+"text": "WAAAAA!",
+"nsp": 0.03
+},
+"mario_wav/028_WsPvDemo002C02Surprised.wav": {
+"text": "HEY!",
+"nsp": 0.07
+},
+"mario_wav/029_WsPvDemo002C03Sorry.wav": {
+"text": "Oh, oh.",
+"nsp": 0.06
+},
+"mario_wav/030_WsPvDemo021C01Fluster00.wav": {
+"text": "Whoa, whoa, whoa, whoa, whoa, whoa!",
+"nsp": 0.1
+},
+"mario_wav/031_WsPvDemo021C01Fluster01.wav": {
+"text": "Oh!",
+"nsp": 0.07
+},
+"mario_wav/032_WsPvDemo021C01Fluster02.wav": {
+"text": "WAH!",
+"nsp": 0.03
+},
+"mario_wav/033_WsPvDemo021C01Fluster03.wav": {
+"text": "Ah!",
+"nsp": 0.2
+},
+"mario_wav/034_WsPvDemo021C01Fluster04.wav": {
+"text": "Oh!",
+"nsp": 0.23
+},
+"mario_wav/035_WsPvD023_1HomeLaunchC00_00.wav": {
+"text": "Woop! Oh yeah! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop! Woop!",
+"nsp": 0.49
+},
+"mario_wav/036_WsPvD023_1HomeLaunchC00_01.wav": {
+"text": "Whoop! Whoop! Oh yeah!",
+"nsp": 0.39
+},
+"mario_wav/037_WsPvD023_1HomeLaunchC00_02.wav": {
+"text": "Whoop! Whoa! Ha-ha! Whoop!",
+"nsp": 0.37
+},
+"mario_wav/038_WsPvD023_1HomeLaunchC00_03.wav": {
+"text": "Whoop. Whoop. Whoop. Whoop. Whoop.",
+"nsp": 0.45
+},
+"mario_wav/039_WsPvD023_1HomeLaunchC01_00.wav": {
+"text": "Oh, oh Mario time",
+"nsp": 0.04
+},
+"mario_wav/040_WsPvD023_1HomeLaunchC01_01.wav": {
+"text": "Ah! Let's-a go!",
+"nsp": 0.08
+},
+"mario_wav/041_WsPvD023_1HomeLaunchC01_02.wav": {
+"text": "Oh, yeah, hello. Here we go.",
+"nsp": 0.01
+},
+"mario_wav/042_WsPvD023_1HomeLaunchC01_03.wav": {
+"text": "Oh",
+"nsp": 0.14
+},
+"mario_wav/043_WsPvDemo024Get00.wav": {
+"text": "Yahoo!",
+"nsp": 0.04
+},
+"mario_wav/044_WsPvDemo024Get01.wav": {
+"text": "Wahoo!",
+"nsp": 0.02
+},
+"mario_wav/045_WsPvDemo025Get00.wav": {
+"text": "Ah, yeah, ha, ha, ha, whoopee, woohoo.",
+"nsp": 0.03
+},
+"mario_wav/046_WsPvDemo025Get01.wav": {
+"text": "Whoo-hoo-hoo!",
+"nsp": 0.04
+},
+"mario_wav/047_WsPvBubbleLauncherJump.wav": {
+"text": "We do",
+"nsp": 0.07
+},
+"mario_wav/048_WsPvGrab00.wav": {
+"text": "Yup!",
+"nsp": 0.1
+},
+"mario_wav/049_WsPvGrab01.wav": {
+"text": "WOOP",
+"nsp": 0.27
+},
+"mario_wav/050_WsPvGrab02.wav": {
+"text": "HUH",
+"nsp": 0.7
+},
+"mario_wav/051_WsPvGrab03.wav": {
+"text": "Boop!",
+"nsp": 0.54
+},
+"mario_wav/052_WsPvGrab04.wav": {
+"text": "HA!",
+"nsp": 0.53
+},
+"mario_wav/053_WsPvGrab05.wav": {
+"text": "Hup.",
+"nsp": 0.71
+},
+"mario_wav/054_WsPvGrabHeavy00.wav": {
+"text": "HUH",
+"nsp": 0.25
+},
+"mario_wav/055_WsPvGrabHeavy01.wav": {
+"text": "Whoo!",
+"nsp": 0.5
+},
+"mario_wav/056_WsPvGrabHeavy02.wav": {
+"text": "Woop!",
+"nsp": 0.35
+},
+"mario_wav/057_WsPvGrabHeavy03.wav": {
+"text": "WOOP",
+"nsp": 0.44
+},
+"mario_wav/058_WsPvHeadSlide00.wav": {
+"text": "Woo-hoo!",
+"nsp": 0.21
+},
+"mario_wav/059_WsPvHeadSlide01.wav": {
+"text": "Woo hoo!",
+"nsp": 0.38
+},
+"mario_wav/060_WsPvHeadSlide02.wav": {
+"text": "Woo hoo!",
+"nsp": 0.4
+},
+"mario_wav/061_WsPvHeadSlide03.wav": {
+"text": "Woo hoo!",
+"nsp": 0.33
+},
+"mario_wav/062_WsPvJump00.wav": {
+"text": "HUH",
+"nsp": 0.37
+},
+"mario_wav/063_WsPvJump01.wav": {
+"text": "HUH",
+"nsp": 0.26
+},
+"mario_wav/064_WsPvJump02.wav": {
+"text": "HOO!",
+"nsp": 0.22
+},
+"mario_wav/065_WsPvJump04.wav": {
+"text": "Whoop!",
+"nsp": 0.41
+},
+"mario_wav/066_WsPvJump06.wav": {
+"text": "Hup!",
+"nsp": 0.38
+},
+"mario_wav/067_WsPvJump08.wav": {
+"text": "WOOP",
+"nsp": 0.17
+},
+"mario_wav/068_WsPvJump10.wav": {
+"text": "HOO!",
+"nsp": 0.45
+},
+"mario_wav/069_WsPvJump11.wav": {
+"text": "Woo hoo!",
+"nsp": 0.2
+},
+"mario_wav/070_WsPvJumpBroad.wav": {
+"text": "Woohoo!",
+"nsp": 0.06
+},
+"mario_wav/071_WsPvJumpHigh00.wav": {
+"text": "Whoo!",
+"nsp": 0.14
+},
+"mario_wav/072_WsPvJumpHigh01.wav": {
+"text": "Woo!",
+"nsp": 0.1
+},
+"mario_wav/073_WsPvJumpHigh02.wav": {
+"text": "Hee hee!",
+"nsp": 0.25
+},
+"mario_wav/074_WsPvJumpTurn00.wav": {
+"text": "Waha!",
+"nsp": 0.02
+},
+"mario_wav/075_WsPvJumpTurn01.wav": {
+"text": "Woo-hoo-hoo!",
+"nsp": 0.06
+},
+"mario_wav/076_WsPvJumpTurn02.wav": {
+"text": "Woo hoo!",
+"nsp": 0.04
+},
+"mario_wav/077_WsPvJumpTurn10.wav": {
+"text": "Woohoo!",
+"nsp": 0.02
+},
+"mario_wav/078_WsPvJumpTurn11.wav": {
+"text": "Whoo!",
+"nsp": 0.22
+},
+"mario_wav/079_WsPvJumpTurn12.wav": {
+"text": "Whoa!",
+"nsp": 0.06
+},
+"mario_wav/080_WsPvLandJump.wav": {
+"text": "Yes!",
+"nsp": 0.05
+},
+"mario_wav/081_WsPvLandStiffen00.wav": {
+"text": "OOF",
+"nsp": 0.6
+},
+"mario_wav/082_WsPvLandStiffen01.wav": {
+"text": "Oh!",
+"nsp": 0.29
+},
+"mario_wav/083_WsPvLandStiffen02.wav": {
+"text": "Oh!",
+"nsp": 0.52
+},
+"mario_wav/084_WsPvLandStiffen10.wav": {
+"text": "I, ooh!",
+"nsp": 0.24
+},
+"mario_wav/085_WsPvLandStiffen11.wav": {
+"text": "WOAH!",
+"nsp": 0.05
+},
+"mario_wav/086_WsPvKick00.wav": {
+"text": "Boop!",
+"nsp": 0.46
+},
+"mario_wav/087_WsPvKick01.wav": {
+"text": "Ha!",
+"nsp": 0.51
+},
+"mario_wav/088_WsPvKick02.wav": {
+"text": "KI-",
+"nsp": 0.68
+},
+"mario_wav/089_WsPvKick03.wav": {
+"text": "whoop",
+"nsp": 0.51
+},
+"mario_wav/090_WsPvKick04.wav": {
+"text": "YAH!",
+"nsp": 0.12
+},
+"mario_wav/091_WsPvKick05.wav": {
+"text": "HUH",
+"nsp": 0.41
+},
+"mario_wav/092_WsPvKick06.wav": {
+"text": "Whoo!",
+"nsp": 0.68
+},
+"mario_wav/093_WsPvPushedBack00.wav": {
+"text": "Whoa, whoa, whoa.",
+"nsp": 0.26
+},
+"mario_wav/094_WsPvPushedBack01.wav": {
+"text": "Ooh!",
+"nsp": 0.15
+},
+"mario_wav/095_WsPvPushedBack02.wav": {
+"text": "Oh!",
+"nsp": 0.36
+},
+"mario_wav/096_WsPvPushedBack03.wav": {
+"text": "Yeah!",
+"nsp": 0.12
+},
+"mario_wav/097_WsPvPushedBack04.wav": {
+"text": "Ahh!",
+"nsp": 0.37
+},
+"mario_wav/098_WsPvSleep00.wav": {
+"text": "Hm? Hm?",
+"nsp": 0.21
+},
+"mario_wav/099_WsPvSleep01.wav": {
+"text": "Ugh.",
+"nsp": 0.04
+},
+"mario_wav/100_WsPvSleep02.wav": {
+"text": "hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm hmm h",
+"nsp": 0.55
+},
+"mario_wav/101_WsPvSleep03.wav": {
+"text": "Mmm, mmm, mmm, mmm, mmm, mmm, mmm, mmm, mmm, mmm, mmm, mmm, mmm, mmm, mmm, mmm, mmm.",
+"nsp": 0.04
+},
+"mario_wav/102_WsPvSleep04.wav": {
+"text": "Hmm",
+"nsp": 0.15
+},
+"mario_wav/103_WsPvSleep05.wav": {
+"text": "Mmm. Mmm. Mmm. Mmm. Mmm. Mmm. Mmm. Meh.",
+"nsp": 0.52
+},
+"mario_wav/104_WsPvSleep06.wav": {
+"text": "Ugh. Yeah. Hmm.",
+"nsp": 0.23
+},
+"mario_wav/105_WsPvSleep07.wav": {
+"text": "Ughhh... Ughh...",
+"nsp": 0.09
+},
+"mario_wav/106_WsPvThrow.wav": {
+"text": "Hoo!",
+"nsp": 0.41
+},
+"mario_wav/107_WsPvThrowHeavy00.wav": {
+"text": "Yahoo!",
+"nsp": 0.26
+},
+"mario_wav/108_WsPvThrowHeavy01.wav": {
+"text": "YAH!",
+"nsp": 0.13
+},
+"mario_wav/109_WsPvThrowHeavy02.wav": {
+"text": "HEE!",
+"nsp": 0.6
+},
+"mario_wav/110_WsPvThrowHeavy03.wav": {
+"text": "Yeah!",
+"nsp": 0.15
+},
+"mario_wav/111_WsPvThrowHeavy04.wav": {
+"text": "Yeah!",
+"nsp": 0.36
+},
+"mario_wav/112_WsPvTired00.wav": {
+"text": "Ahh!",
+"nsp": 0.12
+},
+"mario_wav/113_WsPvTired01.wav": {
+"text": "Ugh.",
+"nsp": 0.11
+},
+"mario_wav/114_WsPvTired02.wav": {
+"text": "Ah!",
+"nsp": 0.19
+},
+"mario_wav/115_WsPvTired03.wav": {
+"text": "HUH?!",
+"nsp": 0.11
+},
+"mario_wav/116_WsPvTired04.wav": {
+"text": "Ahh!",
+"nsp": 0.06
+},
+"mario_wav/117_WsPvTired05.wav": {
+"text": "Ahh!",
+"nsp": 0.1
+},
+"mario_wav/118_WsPvWaitCold00.wav": {
+"text": "Yeah, blah, blah, blah, blah, blah, blah, blah, blah, blah, blah.",
+"nsp": 0.04
+},
+"mario_wav/119_WsPvWaitCold01.wav": {
+"text": "B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B",
+"nsp": 0.07
+},
+"mario_wav/120_WsPvWaitCold02.wav": {
+"text": "Y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y-y",
+"nsp": 0.07
+},
+"mario_wav/121_WsPvWaitCold03.wav": {
+"text": "B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B-B",
+"nsp": 0.09
+},
+"mario_wav/122_WsPvWaitCold10.wav": {
+"text": "Go, go, go, go, go, go, go, go, go, go, go.",
+"nsp": 0.26
+},
+"mario_wav/123_WsPvWaitCold11.wav": {
+"text": "Ooh!",
+"nsp": 0.04
+},
+"mario_wav/124_WsPvWaitCold12.wav": {
+"text": "Cool.",
+"nsp": 0.13
+},
+"mario_wav/125_WsPvWaitCold13.wav": {
+"text": "Oh.",
+"nsp": 0.21
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000006FE.wav": {
+"text": "Ho!",
+"nsp": 0.3
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000006FF.wav": {
+"text": "Ho!",
+"nsp": 0.25
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000700.wav": {
+"text": "Ho!",
+"nsp": 0.17
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000701.wav": {
+"text": "YA-",
+"nsp": 0.1
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000702.wav": {
+"text": "Hope.",
+"nsp": 0.22
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000703.wav": {
+"text": "HA!",
+"nsp": 0.21
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000704.wav": {
+"text": "HOO!",
+"nsp": 0.24
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000705.wav": {
+"text": "Wahoo!",
+"nsp": 0.12
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000706.wav": {
+"text": "Ho!",
+"nsp": 0.23
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000707.wav": {
+"text": "Ha!",
+"nsp": 0.08
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000708.wav": {
+"text": "Hey!",
+"nsp": 0.05
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000709.wav": {
+"text": "Yee-haw!",
+"nsp": 0.03
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000710.wav": {
+"text": "Huh?",
+"nsp": 0.18
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000711.wav": {
+"text": "HEY",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000712.wav": {
+"text": "HAIR!",
+"nsp": 0.14
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000713.wav": {
+"text": "Boo!",
+"nsp": 0.19
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000714.wav": {
+"text": "Whaa!",
+"nsp": 0.14
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000715.wav": {
+"text": "Ho-ho!",
+"nsp": 0.05
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000716.wav": {
+"text": "Ho ho!",
+"nsp": 0.19
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000717.wav": {
+"text": "Yay!",
+"nsp": 0.02
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000718.wav": {
+"text": "Waha",
+"nsp": 0.02
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000719.wav": {
+"text": "HOO!",
+"nsp": 0.44
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000720.wav": {
+"text": "Yeah.",
+"nsp": 0.1
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000721.wav": {
+"text": "HA!",
+"nsp": 0.28
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000722.wav": {
+"text": "Whoo!",
+"nsp": 0.07
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000723.wav": {
+"text": "YEAH!",
+"nsp": 0.03
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000724.wav": {
+"text": "Whoa!",
+"nsp": 0.29
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000725.wav": {
+"text": "Hoo!",
+"nsp": 0.15
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000726.wav": {
+"text": "WAH!",
+"nsp": 0.05
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000727.wav": {
+"text": "Hey!",
+"nsp": 0.08
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000728.wav": {
+"text": "HA!",
+"nsp": 0.58
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000729.wav": {
+"text": "Ah!",
+"nsp": 0.51
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000730.wav": {
+"text": "Hey!",
+"nsp": 0.03
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000731.wav": {
+"text": "Yay!",
+"nsp": 0.03
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000732.wav": {
+"text": "Whoa!",
+"nsp": 0.07
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000733.wav": {
+"text": "Whoa!",
+"nsp": 0.26
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000734.wav": {
+"text": "HUH",
+"nsp": 0.42
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000735.wav": {
+"text": "H-",
+"nsp": 0.58
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000736.wav": {
+"text": "HUH",
+"nsp": 0.85
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000737.wav": {
+"text": "Yay!",
+"nsp": 0.29
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000738.wav": {
+"text": "Ho!",
+"nsp": 0.2
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000739.wav": {
+"text": "Yeah.",
+"nsp": 0.2
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000740.wav": {
+"text": "HUH",
+"nsp": 0.3
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000741.wav": {
+"text": "H-",
+"nsp": 0.19
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000742.wav": {
+"text": "Yup.",
+"nsp": 0.4
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000743.wav": {
+"text": "HOO!",
+"nsp": 0.56
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000744.wav": {
+"text": "Hey.",
+"nsp": 0.23
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000745.wav": {
+"text": "YAH!",
+"nsp": 0.12
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000746.wav": {
+"text": "WOOP",
+"nsp": 0.39
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000747.wav": {
+"text": "Yup.",
+"nsp": 0.04
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000748.wav": {
+"text": "Ha!",
+"nsp": 0.3
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000749.wav": {
+"text": "Ta-da!",
+"nsp": 0.08
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000750.wav": {
+"text": "Ugh, ugh, ugh.",
+"nsp": 0.18
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000751.wav": {
+"text": "Aaargh!",
+"nsp": 0.28
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000752.wav": {
+"text": "HUH",
+"nsp": 0.41
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000753.wav": {
+"text": "HUH",
+"nsp": 0.59
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000754.wav": {
+"text": "",
+"nsp": 1
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000755.wav": {
+"text": "Whoa!",
+"nsp": 0.47
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000756.wav": {
+"text": "YAH!",
+"nsp": 0.21
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000757.wav": {
+"text": "Ho-ho!",
+"nsp": 0.08
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000758.wav": {
+"text": "Ho-ho!",
+"nsp": 0.11
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000759.wav": {
+"text": "Ho!",
+"nsp": 0.27
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000760.wav": {
+"text": "Ho-ho!",
+"nsp": 0.17
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000761.wav": {
+"text": "YA-YA-YA-YA-YA-YA-YA-YA",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000762.wav": {
+"text": "Bloop!",
+"nsp": 0.55
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000763.wav": {
+"text": "Ha!",
+"nsp": 0.45
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000764.wav": {
+"text": "up.",
+"nsp": 0.58
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000765.wav": {
+"text": "Oh!",
+"nsp": 0.39
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000766.wav": {
+"text": "Wowie!",
+"nsp": 0.05
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000767.wav": {
+"text": "Oh yeah!",
+"nsp": 0.1
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000768.wav": {
+"text": "Ho!",
+"nsp": 0.44
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000769.wav": {
+"text": "HURT",
+"nsp": 0.74
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000770.wav": {
+"text": "Rawr!",
+"nsp": 0.11
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000771.wav": {
+"text": "Ah!",
+"nsp": 0.42
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000772.wav": {
+"text": "RAT!",
+"nsp": 0.53
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000773.wav": {
+"text": "Quack!",
+"nsp": 0.59
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000774.wav": {
+"text": "That!",
+"nsp": 0.55
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000775.wav": {
+"text": "Gah!",
+"nsp": 0.7
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000776.wav": {
+"text": "MEOW",
+"nsp": 0.27
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000777.wav": {
+"text": "Rawr!",
+"nsp": 0.44
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000778.wav": {
+"text": "AHHH!",
+"nsp": 0.06
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000779.wav": {
+"text": "Rar!",
+"nsp": 0.25
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000780.wav": {
+"text": "YAH",
+"nsp": 0.53
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000781.wav": {
+"text": "Now!",
+"nsp": 0.27
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000782.wav": {
+"text": "WOW",
+"nsp": 0.61
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000783.wav": {
+"text": "NAH!",
+"nsp": 0.22
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000784.wav": {
+"text": "What?",
+"nsp": 0.62
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000785.wav": {
+"text": "AH!",
+"nsp": 0.6
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000786.wav": {
+"text": "Ah!",
+"nsp": 0.37
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000787.wav": {
+"text": "Wow!",
+"nsp": 0.04
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000788.wav": {
+"text": "MEOW!",
+"nsp": 0.23
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000789.wav": {
+"text": "Rawr!",
+"nsp": 0.42
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000790.wav": {
+"text": "Whoa!",
+"nsp": 0.1
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000791.wav": {
+"text": "Stomping time!",
+"nsp": 0.02
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000792.wav": {
+"text": "HA!",
+"nsp": 0.18
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000793.wav": {
+"text": "HUR!",
+"nsp": 0.4
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000794.wav": {
+"text": "YO!",
+"nsp": 0.07
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000795.wav": {
+"text": "Wowie!",
+"nsp": 0.06
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000796.wav": {
+"text": "Oh.",
+"nsp": 0.38
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000797.wav": {
+"text": "Ah!",
+"nsp": 0.38
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000798.wav": {
+"text": "WAH!",
+"nsp": 0.17
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000799.wav": {
+"text": "Goodie!",
+"nsp": 0.16
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007A0.wav": {
+"text": "Yo-ho!",
+"nsp": 0.03
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007A1.wav": {
+"text": "Oh yeah!",
+"nsp": 0.06
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007A2.wav": {
+"text": "AHHH?!",
+"nsp": 0.51
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007A3.wav": {
+"text": "Hey.",
+"nsp": 0.18
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007A4.wav": {
+"text": "Oh.",
+"nsp": 0.37
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007A5.wav": {
+"text": "Oh.",
+"nsp": 0.62
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007A6.wav": {
+"text": "AHHH",
+"nsp": 0.71
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007A7.wav": {
+"text": "Y-",
+"nsp": 0.53
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007A8.wav": {
+"text": "Oh!",
+"nsp": 0.51
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007A9.wav": {
+"text": "AHHH",
+"nsp": 0.63
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007AA.wav": {
+"text": "Ow!",
+"nsp": 0.25
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007AB.wav": {
+"text": "Ow!",
+"nsp": 0.46
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007AC.wav": {
+"text": "Oh.",
+"nsp": 0.24
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007AD.wav": {
+"text": "Aha!",
+"nsp": 0.3
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007AE.wav": {
+"text": "Wow!",
+"nsp": 0.09
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007AF.wav": {
+"text": "Oh!",
+"nsp": 0.08
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007B0.wav": {
+"text": "Wow.",
+"nsp": 0.06
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007B1.wav": {
+"text": "Oh.",
+"nsp": 0.27
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007B2.wav": {
+"text": "No!",
+"nsp": 0.17
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007B3.wav": {
+"text": "Ow!",
+"nsp": 0.14
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007B4.wav": {
+"text": "and",
+"nsp": 0.44
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007B5.wav": {
+"text": "OH!",
+"nsp": 0.55
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007B6.wav": {
+"text": "No!",
+"nsp": 0.23
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007B7.wav": {
+"text": "BOW!",
+"nsp": 0.5
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007B8.wav": {
+"text": "WAHHH!",
+"nsp": 0.02
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007B9.wav": {
+"text": "NOOOOO",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007BA.wav": {
+"text": "BWAHAHAHA!",
+"nsp": 0.06
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007BB.wav": {
+"text": "Whoa!",
+"nsp": 0.03
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007BC.wav": {
+"text": "Oh, oh, oh, oh, oh.",
+"nsp": 0.14
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007BD.wav": {
+"text": "Ewww!",
+"nsp": 0.03
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007BE.wav": {
+"text": "Oh no!",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007BF.wav": {
+"text": "Whoa-ho-ho-ho!",
+"nsp": 0.02
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C0.wav": {
+"text": "YOWWWWWWWWWW",
+"nsp": 0.05
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C1.wav": {
+"text": "Wahoo!",
+"nsp": 0.07
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C2.wav": {
+"text": "Uh-oh.",
+"nsp": 0.12
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C3.wav": {
+"text": "Haha!",
+"nsp": 0.07
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C4.wav": {
+"text": "Oh!",
+"nsp": 0.19
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C5.wav": {
+"text": "Ho-ho!",
+"nsp": 0.15
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C6.wav": {
+"text": "Ho-ho!",
+"nsp": 0.11
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C7.wav": {
+"text": "YEAH!",
+"nsp": 0.07
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C8.wav": {
+"text": "YEAH!",
+"nsp": 0.08
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C9.wav": {
+"text": "Ho-ho!",
+"nsp": 0.09
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007CA.wav": {
+"text": "Ho-ho!",
+"nsp": 0.09
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007CB.wav": {
+"text": "Oh!",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007CC.wav": {
+"text": "Yahoo!",
+"nsp": 0.16
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007CD.wav": {
+"text": "Yahoo!",
+"nsp": 0.16
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007CE.wav": {
+"text": "No, no, oh.",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007CF.wav": {
+"text": "Come on!",
+"nsp": 0.05
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D0.wav": {
+"text": "Oh!",
+"nsp": 0.1
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D1.wav": {
+"text": "Oh!",
+"nsp": 0.25
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D2.wav": {
+"text": "Oh!",
+"nsp": 0.16
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D3.wav": {
+"text": "What?",
+"nsp": 0.05
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D4.wav": {
+"text": "Aha!",
+"nsp": 0.29
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D5.wav": {
+"text": "Gotcha.",
+"nsp": 0.14
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D6.wav": {
+"text": "Yeah!",
+"nsp": 0.04
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D7.wav": {
+"text": "Ho!",
+"nsp": 0.41
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D8.wav": {
+"text": "HA!",
+"nsp": 0.32
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D9.wav": {
+"text": "YA-",
+"nsp": 0.09
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007DA.wav": {
+"text": "Ho!",
+"nsp": 0.16
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007DB.wav": {
+"text": "Ho!",
+"nsp": 0.28
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007DC.wav": {
+"text": "YEAH!",
+"nsp": 0.03
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007DD.wav": {
+"text": "Oh.",
+"nsp": 0.33
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007DE.wav": {
+"text": "Wha-",
+"nsp": 0.35
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007DF.wav": {
+"text": "Oh, oh.",
+"nsp": 0.17
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007E0.wav": {
+"text": "See ya!",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007E1.wav": {
+"text": "Oh yeah.",
+"nsp": 0.04
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A65.wav": {
+"text": "Ho, ho.",
+"nsp": 0.09
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A66.wav": {
+"text": "Ha ha!",
+"nsp": 0.12
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A67.wav": {
+"text": "Oh!",
+"nsp": 0.16
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A68.wav": {
+"text": "Hiya!",
+"nsp": 0.05
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A69.wav": {
+"text": "WOAH!",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A6A.wav": {
+"text": "Woah!",
+"nsp": 0.09
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A6B.wav": {
+"text": "Oh, oh.",
+"nsp": 0.07
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A6C.wav": {
+"text": "Ugh!",
+"nsp": 0.04
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A6D.wav": {
+"text": "Blah, blah, blah.",
+"nsp": 0.32
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A6E.wav": {
+"text": "Oh!",
+"nsp": 0.4
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A6F.wav": {
+"text": "Ha!",
+"nsp": 0.22
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A70.wav": {
+"text": "Oh no.",
+"nsp": 0.08
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A71.wav": {
+"text": "All.",
+"nsp": 0.17
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A72.wav": {
+"text": "It's!",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A73.wav": {
+"text": "Fuck!",
+"nsp": 0.55
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A74.wav": {
+"text": "OH! WAAAAAH! Hahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahah Hahahahah Hahahahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A9B.wav": {
+"text": "Oh!",
+"nsp": 0.07
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A9C.wav": {
+"text": "AH!",
+"nsp": 0.3
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A9D.wav": {
+"text": "Blah, blah, blah.",
+"nsp": 0.28
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A9E.wav": {
+"text": "Oh, no, no, no.",
+"nsp": 0.07
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A9F.wav": {
+"text": "Huh?",
+"nsp": 0.15
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000AA0.wav": {
+"text": "Oh!",
+"nsp": 0.11
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000AA1.wav": {
+"text": "No!",
+"nsp": 0.02
+},
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000AA2.wav": {
+"text": "Quack!",
+"nsp": 0.37
+},
+"luigi_zip/Luigi SM3DW/SeResourceStdSystem_000000C4.wav": {
+"text": "Ha ha! Luigi! Go green!",
+"nsp": 0.05
+},
+"luigi_zip/Luigi SM3DW/SeResourceStdSystem_000000C5.wav": {
+"text": "Let's-a go!",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStdSystem_000000C6.wav": {
+"text": "Fight the time!",
+"nsp": 0.18
+},
+"luigi_zip/Luigi SM3DW/SeResourceStdSystem_000000C7.wav": {
+"text": "Let's and do this!",
+"nsp": 0.0
+},
+"luigi_zip/Luigi SM3DW/SeResourceStdSystem_000000C8.wav": {
+"text": "It's about time!",
+"nsp": 0.0
+},
+"luigi_zip/Luigi SM3DW/SeResourceStdSystem_000000C9.wav": {
+"text": "Luigi time!",
+"nsp": 0.01
+},
+"luigi_zip/Luigi SM3DW/SeResourceStdSystem_000000CA.wav": {
+"text": "Okey-dokey!",
+"nsp": 0.09
+},
+"luigi_zip/Luigi SM3DW/SeResourceStdSystem_000000CB.wav": {
+"text": "HA!",
+"nsp": 0.21
+},
+"luigi_zip/Luigi SM3DW/SeResourceStdSystem_000000E7.wav": {
+"text": "Meow.",
+"nsp": 0.06
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [0] - SE_PV_JUMP_JOY_01.wav": {
+"text": "Ho yahoo!",
+"nsp": 0.01
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [10] - SE_PV_JUMP_M_02.wav": {
+"text": "MA-",
+"nsp": 0.13
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [11] - SE_PV_JUMP_TURN_01.wav": {
+"text": "Yahoo!",
+"nsp": 0.03
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [12] - SE_PV_JUMP_TURN_02.wav": {
+"text": "Woohoo!",
+"nsp": 0.04
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [13] - SE_PV_LAND.wav": {
+"text": "HUH",
+"nsp": 0.36
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [14] - SE_PV_LAND_COOL.wav": {
+"text": "YEAH!",
+"nsp": 0.02
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [15] - SE_PV_HIP_DROP_LAND_01.wav": {
+"text": "YEAH!",
+"nsp": 0.13
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [16] - SE_PV_HIP_DROP_LAND_02.wav": {
+"text": "Blah!",
+"nsp": 0.48
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [17] - SE_PV_HIP_DROP_01.wav": {
+"text": "HUH",
+"nsp": 0.14
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [18] - SE_PV_HIP_DROP_02.wav": {
+"text": "BIA!",
+"nsp": 0.2
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [19] - SE_PV_DOWN.wav": {
+"text": "Ha ha ha ha ha",
+"nsp": 0.02
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [1] - SE_PV_JUMP_JOY_02.wav": {
+"text": "Wahoo!",
+"nsp": 0.01
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [20] - SE_PV_LAST_DAMAGE.wav": {
+"text": "Oh!",
+"nsp": 0.11
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [21] - SE_PV_DAMAGE_S_01.wav": {
+"text": "AH!",
+"nsp": 0.42
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [22] - SE_PV_DAMAGE_S_02.wav": {
+"text": "Oh!",
+"nsp": 0.45
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [23] - SE_PV_DAMAGE_S_03.wav": {
+"text": "Ouch!",
+"nsp": 0.24
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [24] - SE_PV_DOWN_WATER.wav": {
+"text": "I'm the ramen, ramen, ramen, ramen, ramen.",
+"nsp": 0.26
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [25] - SE_PV_LAST_DAMAGE_WATER.wav": {
+"text": "BRRRRRRRRRRRRRRRRRRRRRR",
+"nsp": 0.21
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [26] - SE_PV_DAMAGE_S_WATER_01.wav": {
+"text": "I love you.",
+"nsp": 0.49
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [27] - SE_PV_DAMAGE_S_WATER_02.wav": {
+"text": "BAMBAMBAMBAM",
+"nsp": 0.49
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [28] - SE_PV_BURN.wav": {
+"text": "AH!",
+"nsp": 0.65
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [29] - SE_PV_BURN_RECOVERY.wav": {
+"text": "Ahhh!",
+"nsp": 0.02
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [2] - SE_PV_JUMP_JOY_03.wav": {
+"text": "YAHOOA!",
+"nsp": 0.03
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [30] - SE_PV_BURN_RUN.wav": {
+"text": "I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I-I",
+"nsp": 0.19
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [31] - SE_PV_FREEZE.wav": {
+"text": "HUH?!",
+"nsp": 0.21
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [32] - SE_PV_NEEDLE_DAMAGE.wav": {
+"text": "Bye!",
+"nsp": 0.4
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [33] - SE_PV_NEEDLE_DAMAGE_RECOVER.wav": {
+"text": "HUH!",
+"nsp": 0.0
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [34] - SE_PV_NEEDLE_DAMAGE_RUN.wav": {
+"text": "Oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh",
+"nsp": 0.05
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [35] - SE_PV_ELEC_DAMAGE.wav": {
+"text": "AHHH!",
+"nsp": 0.03
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [36] - SE_PV_ELEC_DAMAGE_RECOVER.wav": {
+"text": "HUH!",
+"nsp": 0.09
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [37] - SE_PV_COLD_WATER_DAMAGE.wav": {
+"text": "HUH!",
+"nsp": 0.07
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [38] - SE_PV_FALL_DIE.wav": {
+"text": "Wha-ha-ha-ha-ha-ha-ha!",
+"nsp": 0.03
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [39] - (No Label, Meaning It's Unused).wav": {
+"text": "Oh my gosh!",
+"nsp": 0.15
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [3] - SE_PV_JUMP_L.wav": {
+"text": "HOOYAH!",
+"nsp": 0.15
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [40] - SE_PV_FAINTED.wav": {
+"text": "No!",
+"nsp": 0.07
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [41] - SE_PV_UPSET.wav": {
+"text": "Blah, blah, blah, blah, blah, blah, blah, blah, blah, blah,",
+"nsp": 0.09
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [42] - SE_PV_THROWN.wav": {
+"text": "Wow, wow, wow.",
+"nsp": 0.0
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [43] - SE_PV_PUNCH_01.wav": {
+"text": "HUH",
+"nsp": 0.51
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [44] - SE_PV_PUNCH_02.wav": {
+"text": "HA!",
+"nsp": 0.38
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [45] - SE_PV_KICK_01.wav": {
+"text": "UGH",
+"nsp": 0.77
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [46] - SE_PV_KICK_02.wav": {
+"text": "HA!",
+"nsp": 0.12
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [47] - SE_PV_SPIN_01.wav": {
+"text": "YEAH!",
+"nsp": 0.06
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [48] - SE_PV_SPIN_02.wav": {
+"text": "WAH!",
+"nsp": 0.08
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [49] - SE_PV_SPIN_03.wav": {
+"text": "YEAH!",
+"nsp": 0.02
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [4] - SE_PV_JUMP_S_01.wav": {
+"text": "HUH",
+"nsp": 0.58
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [50] - SE_PV_SPIN_CANCEL.wav": {
+"text": "Oh!",
+"nsp": 0.06
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [51] - SE_PV_LIFT_UP_01.wav": {
+"text": "Huh?",
+"nsp": 0.14
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [52] - SE_PV_LIFT_UP_02.wav": {
+"text": "Wha-",
+"nsp": 0.05
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [53] - SE_PV_THROW_01.wav": {
+"text": "Yeah!",
+"nsp": 0.06
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [54] - SE_PV_THROW_02.wav": {
+"text": "Nyah!",
+"nsp": 0.41
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [55] - SE_PV_STRAIN.wav": {
+"text": "HUH",
+"nsp": 0.08
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [56] - SE_PV_CATCH.wav": {
+"text": "HA!",
+"nsp": 0.13
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [57] - SE_PV_CLIFF_CLIMB.wav": {
+"text": "Ugh!",
+"nsp": 0.15
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [58] - SE_PV_CLIFF_FALL_HANG.wav": {
+"text": "Wha- Oh!",
+"nsp": 0.09
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [59] - SE_PV_BURY_HEAD_RECOVER.wav": {
+"text": "AHHH!",
+"nsp": 0.08
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [5] - SE_PV_JUMP_S_02.wav": {
+"text": "HUH",
+"nsp": 0.48
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [60] - SE_PV_BURY_HEAD.wav": {
+"text": "GAR!",
+"nsp": 0.18
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [61] - SE_PV_LIE_WAIT.wav": {
+"text": "MMMMMMMMMMMMMM",
+"nsp": 0.06
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [62] - SE_PV_RELEAVED.wav": {
+"text": "Uh-huh.",
+"nsp": 0.05
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [63] - SE_PV_SLEEP_1.wav": {
+"text": "RRRRRRRRRRRRRRRRRRRR",
+"nsp": 0.24
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [64] - SE_PV_SLEEP_2.wav": {
+"text": "Ugh...",
+"nsp": 0.01
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [65] - SE_PV_YAWN.wav": {
+"text": "YEAH! Ugh.",
+"nsp": 0.02
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [66] - SE_PV_TIRED_01.wav": {
+"text": "Ahh!",
+"nsp": 0.03
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [67] - SE_PV_TIRED_02.wav": {
+"text": "HUH?!",
+"nsp": 0.02
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [68] - SE_PV_TIRED_03.wav": {
+"text": "Ugh.",
+"nsp": 0.01
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [69] - SE_PV_GRAND_STAR_GET.wav": {
+"text": "Star!",
+"nsp": 0.0
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [6] - SE_PV_JUMP_S_03.wav": {
+"text": "HA!",
+"nsp": 0.42
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [70] - SE_PV_TOUCH_GRAND_STAR_1.wav": {
+"text": "WAH!",
+"nsp": 0.14
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [71] - SE_PV_TOUCH_GRAND_STAR_2.wav": {
+"text": "YAH!",
+"nsp": 0.05
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [72] - SE_PV_POWER_STAR_GET.wav": {
+"text": "Yaha",
+"nsp": 0.01
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [73] - SE_PV_DAMAGE_L.wav": {
+"text": "HUH!",
+"nsp": 0.31
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [74] - SE_PV_SQUAT.wav": {
+"text": "Huh?",
+"nsp": 0.02
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [75] - SE_PV_BURY_FOOT_RECOVERY.wav": {
+"text": "AH!",
+"nsp": 0.37
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [76] - SE_PV_BURY_FOOT.wav": {
+"text": "BOO!",
+"nsp": 0.27
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [77] - SE_PV_HIGH_DIVE.wav": {
+"text": "Wahoo!",
+"nsp": 0.01
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [78] - SE_PV_MUD_SINK.wav": {
+"text": "Who the hell had that question?",
+"nsp": 0.03
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [79] - SE_PV_DIE_MUD.wav": {
+"text": "AH!",
+"nsp": 0.17
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [7] - SE_PV_JUMP_LONG_01.wav": {
+"text": "YEAH!",
+"nsp": 0.03
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [8] - SE_PV_JUMP_LONG_02.wav": {
+"text": "Yeah",
+"nsp": 0.01
+},
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [9] - SE_PV_JUMP_M_01.wav": {
+"text": "YAH!",
+"nsp": 0.08
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [0] - SE_SV_LUIGI_LIFT_UP.wav": {
+"text": "YEAH!",
+"nsp": 0.02
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [10] - SE_SV_LUIGI_TALK_OH_YEAH.wav": {
+"text": "Oh yeah!",
+"nsp": 0.04
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [11] - SE_SV_LUIGI_SPIN.wav": {
+"text": "WAH!",
+"nsp": 0.03
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [12] - (No Label, Meaning It's Unused).wav": {
+"text": "Heh heh heh.",
+"nsp": 0.01
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [13] - SE_SV_LUIGI_TRAMPLED_01.wav": {
+"text": "Now!",
+"nsp": 0.43
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [14] - SE_SV_LUIGI_TRAMPLED_02.wav": {
+"text": "Oh!",
+"nsp": 0.49
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [15] - SE_SV_LUIGI_TALK_YAH.wav": {
+"text": "YEAH!",
+"nsp": 0.01
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [1] - SE_SV_LUIGI_SORRY_01.wav": {
+"text": "Ah, heh.",
+"nsp": 0.01
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [2] - SE_SV_LUIGI_FRIGHTENED.wav": {
+"text": "Eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+"nsp": 0.01
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [3] - SE_SV_LUIGI_MARIO.wav": {
+"text": "MARIO!",
+"nsp": 0.01
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [4] - SE_SV_LUIGI_TALK_TIRE.wav": {
+"text": "Ugh!",
+"nsp": 0.29
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [5] - SE_SV_LUIGI_SORRY_02.wav": {
+"text": "Sorry.",
+"nsp": 0.0
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [6] - SE_SV_LUIGI_THANKS.wav": {
+"text": "Thanks.",
+"nsp": 0.0
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [7] - SE_SV_LUIGI_FALL.wav": {
+"text": "AHHHHHHHHHHHHHHHHHHHHHHH",
+"nsp": 0.01
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [8] - SE_SV_LUIGI_TALK_HELP.wav": {
+"text": "Help me!",
+"nsp": 0.0
+},
+"galaxy/Luigi/(Non-Playable)/Wave_49_B117take_0.aw [9] - SE_SV_LV_LUIGI_AFRAID.wav": {
+"text": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+"nsp": 0.02
+},
+"galaxy/Luigi/(Non-Playable)/Wave_5_B64kawa_0.aw [88] - SE_SV_LUIGI_POW_STAR_GET_WITH.wav": {
+"text": "with me, Luigi!",
+"nsp": 0.02
+},
+"galaxy/Luigi/(Non-Playable)/Wave_6_B72take_0.aw [163] - SE_SV_LUIGI_HEY.wav": {
+"text": "Hey!",
+"nsp": 0.01
+},
+"galaxy/Luigi/(System)/Wave_50_B98kawa_0.aw [0] - SE_SY_FILE_SEL_SW_LUIGI.wav": {
+"text": "Ouija!",
+"nsp": 0.02
+},
+"galaxy/Luigi/(System)/Wave_5_B64kawa_0.aw [61] - SE_SY_LUIGI_MODE_APPEAR (JP, US, PAL).wav": {
+"text": "Super Luigi Galaxy",
+"nsp": 0.0
+},
+"galaxy/Luigi/(System)/Wave_5_B64kawa_0.aw [61] - SE_SY_LUIGI_MODE_APPEAR (Korean).wav": {
+"text": "Super Luigi Wii!",
+"nsp": 0.01
+},
+"galaxy/Luigi/(System)/Wave_5_B64kawa_0.aw [62] - SE_SY_THANK_YOU_LUIGI.wav": {
+"text": "Thank you for playing my game!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/408.wav": {
+"text": "What?!",
+"nsp": 0.03
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/409.wav": {
+"text": "Ow!",
+"nsp": 0.41
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/410.wav": {
+"text": "Oh!",
+"nsp": 0.18
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/411.wav": {
+"text": "Whoa!",
+"nsp": 0.03
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/412.wav": {
+"text": "Ha!",
+"nsp": 0.1
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/413.wav": {
+"text": "Ah!",
+"nsp": 0.15
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/443.wav": {
+"text": "Hah.",
+"nsp": 0.03
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/446.wav": {
+"text": "Luigi, gotcha!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/447.wav": {
+"text": "WOAH!",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/449.wav": {
+"text": "Whoa!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/450.wav": {
+"text": "Ah!",
+"nsp": 0.14
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/451.wav": {
+"text": "I gotcha.",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/452.wav": {
+"text": "YEAH!",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/453.wav": {
+"text": "Haha!",
+"nsp": 0.17
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/455.wav": {
+"text": "Yeah!",
+"nsp": 0.04
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/457.wav": {
+"text": "WAAH!",
+"nsp": 0.04
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/458.wav": {
+"text": "HUHUHUHUHUHUHUHU",
+"nsp": 0.15
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/459.wav": {
+"text": "Oh yeah!",
+"nsp": 0.06
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/460.wav": {
+"text": "Oh yeah!",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/463.wav": {
+"text": "Huh!",
+"nsp": 0.5
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/464.wav": {
+"text": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/466.wav": {
+"text": "Blah, blah, blah.",
+"nsp": 0.29
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/467.wav": {
+"text": "Ha ha ha ha ha!",
+"nsp": 0.07
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/468.wav": {
+"text": "WAH!",
+"nsp": 0.08
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/469.wav": {
+"text": "Hohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohohoh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh oh",
+"nsp": 0.19
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/470.wav": {
+"text": "Bye!",
+"nsp": 0.09
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/471.wav": {
+"text": "Huh!",
+"nsp": 0.4
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/472.wav": {
+"text": "WOAH!",
+"nsp": 0.07
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/473.wav": {
+"text": "Ah!",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/474.wav": {
+"text": "Oh!",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/476.wav": {
+"text": "WAAAAA-HA-HA!",
+"nsp": 0.04
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/477.wav": {
+"text": "AHHH!",
+"nsp": 0.07
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/478.wav": {
+"text": "AHHH!",
+"nsp": 0.11
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/479.wav": {
+"text": "Woah!",
+"nsp": 0.1
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/481.wav": {
+"text": "Hahaha! Hehehe!",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/483.wav": {
+"text": "Whoa!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/484.wav": {
+"text": "G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G-G",
+"nsp": 0.15
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/485.wav": {
+"text": "Mmhmm.",
+"nsp": 0.4
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/486.wav": {
+"text": "YO-YO-YO-YO-YO-YO-YO-YO-YO-YO-YO-YO-YO-YO-YO-YO!",
+"nsp": 0.06
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/487.wav": {
+"text": "Yeah, b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b-b",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/488.wav": {
+"text": "Yeah! Whoa, whoa, whoa, whoa!",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/489.wav": {
+"text": "Ow! Woah! Nice doggy! Nice doggy! Pet, pet!",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/490.wav": {
+"text": "Oooh!",
+"nsp": 0.03
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/491.wav": {
+"text": "Luigi, leeeeeeeeeeeeeeeeeeeeeeee",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/492.wav": {
+"text": "WOAH!",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/493.wav": {
+"text": "WOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWOWWOWWOWWOWWOWWOWWOWWOWWOWWOWWOWWOWWOWWOWWOWWOWWOWWOWWOWWOW",
+"nsp": 0.04
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/494.wav": {
+"text": "Phew! Mamma mia!",
+"nsp": 0.03
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/495.wav": {
+"text": "Yeah.",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/496.wav": {
+"text": "YEET!",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/497.wav": {
+"text": "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE",
+"nsp": 0.03
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/498.wav": {
+"text": "Ha ha!",
+"nsp": 0.26
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/499.wav": {
+"text": "I do it.",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/500.wav": {
+"text": "Got it! Yeah!",
+"nsp": 0.07
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/501.wav": {
+"text": "Oh yeah!",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/502.wav": {
+"text": "Hello?",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/503.wav": {
+"text": "Hey, hello.",
+"nsp": 0.25
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/504.wav": {
+"text": "Argh!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/505.wav": {
+"text": "Argh!",
+"nsp": 0.03
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/507.wav": {
+"text": "Huh?",
+"nsp": 0.07
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/508.wav": {
+"text": "Huh?",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/509.wav": {
+"text": "Oh yeah!",
+"nsp": 0.22
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/510.wav": {
+"text": "Yeah!",
+"nsp": 0.04
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/511.wav": {
+"text": "Oh yeah!",
+"nsp": 0.16
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/512.wav": {
+"text": "Yes!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/513.wav": {
+"text": "Oh!",
+"nsp": 0.25
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/514.wav": {
+"text": "Got it!",
+"nsp": 0.13
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/515.wav": {
+"text": "Gotcha!",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/516.wav": {
+"text": "Yes!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/517.wav": {
+"text": "Ugh!",
+"nsp": 0.09
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/518.wav": {
+"text": "Ha!",
+"nsp": 0.27
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/519.wav": {
+"text": "Yeah.",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/520.wav": {
+"text": "WAH!",
+"nsp": 0.19
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/521.wav": {
+"text": "Ha!",
+"nsp": 0.12
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/522.wav": {
+"text": "Hmm.",
+"nsp": 0.11
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/523.wav": {
+"text": "Oh...",
+"nsp": 0.04
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/524.wav": {
+"text": "Woah!",
+"nsp": 0.06
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/525.wav": {
+"text": "Wha-",
+"nsp": 0.1
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/526.wav": {
+"text": "Oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh, oh.",
+"nsp": 0.18
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/527.wav": {
+"text": "Hahaha!",
+"nsp": 0.1
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/528.wav": {
+"text": "WOOHOO!",
+"nsp": 0.09
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/529.wav": {
+"text": "Ugh!",
+"nsp": 0.34
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/530.wav": {
+"text": "Oh yeah!",
+"nsp": 0.1
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/531.wav": {
+"text": "Huh?",
+"nsp": 0.04
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/532.wav": {
+"text": "Oh!",
+"nsp": 0.1
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/533.wav": {
+"text": "AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/534.wav": {
+"text": "Ah!",
+"nsp": 0.03
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/535.wav": {
+"text": "Blah, blah, blah.",
+"nsp": 0.18
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/536.wav": {
+"text": "Yeah!",
+"nsp": 0.11
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/537.wav": {
+"text": "Blah!",
+"nsp": 0.19
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/538.wav": {
+"text": "Mmm!",
+"nsp": 0.38
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/539.wav": {
+"text": "Whoa!",
+"nsp": 0.37
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/540.wav": {
+"text": "Whoa, whoa, whoa, whoa, whoa, whoa, whoa, whoa, whoa, whoa, whoa, whoa, whoa.",
+"nsp": 0.18
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/541.wav": {
+"text": "YEAH!!!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/542.wav": {
+"text": "WAAAAAAH!",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/543.wav": {
+"text": "Ha ha!",
+"nsp": 0.37
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/544.wav": {
+"text": "Yahoo!",
+"nsp": 0.58
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/546.wav": {
+"text": "Mario!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/547.wav": {
+"text": "Mario!",
+"nsp": 0.27
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/548.wav": {
+"text": "M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M-M",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/549.wav": {
+"text": "Mario!",
+"nsp": 0.06
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/550.wav": {
+"text": "Mario!",
+"nsp": 0.0
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/551.wav": {
+"text": "Mario!",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/552.wav": {
+"text": "Mario!",
+"nsp": 0.08
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/553.wav": {
+"text": "Mario!",
+"nsp": 0.02
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/554.wav": {
+"text": "Mario?",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/555.wav": {
+"text": "Mario!",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/556.wav": {
+"text": "Mario!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/557.wav": {
+"text": "Mario?",
+"nsp": 0.03
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/558.wav": {
+"text": "Mario!",
+"nsp": 0.01
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/(Ending Cutscene)/434.wav": {
+"text": "mamma mia eh?",
+"nsp": 0.05
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/(Ending Cutscene)/435.wav": {
+"text": "hahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahah Hahahahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah Hahah H",
+"nsp": 0.42
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/(Ending Cutscene)/436.wav": {
+"text": "Ahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahah",
+"nsp": 0.16
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/(Ending Cutscene)/437.wav": {
+"text": "Ahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahaha",
+"nsp": 0.04
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/(Ending Cutscene)/438.wav": {
+"text": "Hahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahahah",
+"nsp": 0.06
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/(Ending Cutscene)/439.wav": {
+"text": "Oh, oh, oh, oh, Mario!",
+"nsp": 0.14
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/(Ending Cutscene)/440.wav": {
+"text": "Oh, Mario?",
+"nsp": 0.34
+},
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/(Ending Cutscene)/441.wav": {
+"text": "WAH!",
+"nsp": 0.03
+}
+}

@@ -41,7 +41,7 @@ select{font:14px var(--body);background:var(--panel);color:var(--fg);border:1px 
 <div class="wrap">
   <header style="display:grid;gap:8px">
     <h1>Luigi's <span>voice</span> lines</h1>
-    <p class="lede">Press <b>Mario</b> to hear the original and <b>Luigi now</b> for his current clip. Below each line are the Galaxy clips whose title matches that move. Tap one to hear it and choose it, tap it again to undo. Picks save on their own; tell me in the chat when you're done.</p>
+    <p class="lede">Press <b>Mario</b> to hear the original and <b>Luigi now</b> for his current clip. Each clip shows what Luigi says in it, so you can pick by the words. Below each line are the Galaxy clips whose title matches that move. Tap one to hear it and choose it, tap it again to undo. Picks save on their own; tell me in the chat when you're done.</p>
   </header>
   <div class="bar"><label for="q">Find a line</label><input id="q" type="search" placeholder="jump, sleep, hurt…"><span class="status" id="st">Loading saved picks…</span></div>
   <div class="list" id="list"></div>
@@ -54,7 +54,7 @@ let picks={};           // slot -> clip id
 let db=null, ref=null, writing=Promise.resolve();
 const list=document.getElementById('list'), st=document.getElementById('st');
 const groups={};for(const [id,c] of Object.entries(D.clips)){(groups[c.group]=groups[c.group]||[]).push([id,c]);}
-const short=id=>D.clips[id]?D.clips[id].label.replace(/ \((\d|\.)+s\)$/,''):id;
+const short=id=>D.clips[id]?D.clips[id].label.replace(/ \(([\d.])+s\)$/,''):id;
 function usage(){const u={};for(const r of D.rows){const id=picks[r.slot]||r.curId;if(id)(u[id]=u[id]||[]).push(r);}return u;}
 const views=[];
 for(const r of D.rows){
