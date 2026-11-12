@@ -21,7 +21,15 @@ def fwav(rate,pcm):
     h+=b'\0'*(0x40-len(h))
     return h+info+dat
 waves={};cache={}
+def cut(v):
+    # ['CUT', path, start_s, end_s or None, semitones]: a piece of a clip, optionally re-pitched
+    import librosa
+    r,a=rd(v[1]); st=int(v[2]*r); en=int(v[3]*r) if v[3] else len(a); a=a[st:en]
+    if v[4]: a=librosa.effects.pitch_shift(a/32768.0,sr=r,n_steps=v[4])*32768.0
+    fade=int(r*0.02); a=a.copy(); a[:fade]*=np.linspace(0,1,fade); a[-fade:]*=np.linspace(1,0,fade)
+    return r,a.astype(np.float32)
 def src(v,slot):
+    if isinstance(v,list) and v[0]=='CUT': return cut(v)
     if isinstance(v,list):  # ['SNORE', clip1, clip2]: alternate with gaps up to Mario's length
         _,m=rd(mario[slot]); target=len(m)/48000.0
         clips=[rd(x) for x in v[1:]]; r=max(c[0] for c in clips); parts=[];t=0.0;i=0
@@ -40,6 +48,8 @@ for slot,lk in mapping.items():
     g=rms(m)/rms(a); a=a*g
     pk=np.abs(a).max()
     if pk>31000:a*=31000/pk
+    os.makedirs('slotwav',exist_ok=True)
+    _w=wave.open('slotwav/%03d.wav'%slot,'wb');_w.setnchannels(1);_w.setsampwidth(2);_w.setframerate(r);_w.writeframes(np.round(a).astype('<i2').tobytes());_w.close()
     key=(json.dumps(lk),round(g,2))
     if key not in cache: cache[key]=fwav(r,np.round(a).astype(np.int16))
     waves[slot]=key

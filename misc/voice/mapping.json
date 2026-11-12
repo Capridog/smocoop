@@ -80,9 +80,11 @@
 "97": "galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [23] - SE_PV_DAMAGE_S_03.wav",
 "98": "galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [65] - SE_PV_YAWN.wav",
 "99": [
-"SNORE",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [63] - SE_PV_SLEEP_1.wav",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [64] - SE_PV_SLEEP_2.wav"
+"CUT",
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [65] - SE_PV_YAWN.wav",
+0,
+null,
+-1.0
 ],
 "100": [
 "SNORE",
@@ -90,29 +92,31 @@
 "galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [64] - SE_PV_SLEEP_2.wav"
 ],
 "101": [
-"SNORE",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [63] - SE_PV_SLEEP_1.wav",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [64] - SE_PV_SLEEP_2.wav"
+"CUT",
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A74.wav",
+0,
+3.4,
+0
 ],
-"102": [
-"SNORE",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [63] - SE_PV_SLEEP_1.wav",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [64] - SE_PV_SLEEP_2.wav"
-],
+"102": "galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [61] - SE_PV_LIE_WAIT.wav",
 "103": [
 "SNORE",
 "galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [63] - SE_PV_SLEEP_1.wav",
 "galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [64] - SE_PV_SLEEP_2.wav"
 ],
 "104": [
-"SNORE",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [63] - SE_PV_SLEEP_1.wav",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [64] - SE_PV_SLEEP_2.wav"
+"CUT",
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [65] - SE_PV_YAWN.wav",
+0,
+null,
+1.0
 ],
 "105": [
-"SNORE",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [63] - SE_PV_SLEEP_1.wav",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [64] - SE_PV_SLEEP_2.wav"
+"CUT",
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [65] - SE_PV_YAWN.wav",
+0,
+null,
+-0.5
 ],
 "106": "SeResourceStd2nd_00000700.wav",
 "107": "galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [53] - SE_PV_THROW_01.wav",

@@ -1,0 +1,84 @@
+<title>Luigi Voice Picker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one column of slot rows (Mario's line, Luigi's current line, a pick), then a copy-out summary */
+:root{
+  --bg:#f3f6f1; --panel:#ffffff; --fg:#17231a; --muted:#5b6b5e; --line:#d5ded5;
+  --green:#1f8a3b; --green-ink:#ffffff; --red:#c8322b; --chip:#e6efe5;
+  --display:'Bricolage Grotesque',system-ui,sans-serif; --body:'Atkinson Hyperlegible',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f1611;--panel:#162019;--fg:#e4eee5;--muted:#93a596;--line:#2a372d;--green:#3fbf62;--green-ink:#08140b;--red:#ef6a5f;--chip:#1e2b21;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1611;--panel:#162019;--fg:#e4eee5;--muted:#93a596;--line:#2a372d;--green:#3fbf62;--green-ink:#08140b;--red:#ef6a5f;--chip:#1e2b21;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 var(--body)}
+.wrap{max-width:860px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:22px}
+h1{font:800 clamp(28px,5vw,42px)/1.05 var(--display);margin:0;text-wrap:balance}
+h1 span{color:var(--green)}
+.lede{color:var(--muted);max-width:62ch;margin:0}
+.list{display:grid;gap:10px}
+.row{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:center}
+.row.changed{border-color:var(--green)}
+.name{font:600 18px/1.2 var(--display)}
+.note{font:12px/1.3 var(--mono);color:var(--muted);margin-top:4px}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-width:0}
+button{font:600 14px var(--body);border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--fg);padding:7px 13px;cursor:pointer}
+button:focus-visible,select:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+button.m{border-color:var(--red);color:var(--red);background:transparent}
+button.l{background:var(--green);border-color:var(--green);color:var(--green-ink)}
+select{font:14px var(--body);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:7px 8px;max-width:100%;min-width:0;flex:1 1 220px}
+.out{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px}
+.out pre{margin:0;font:13px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word;color:var(--fg)}
+.out .hd{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.filter{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.filter label{font-weight:700}
+#q{font:15px var(--body);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;flex:1 1 220px;min-width:0}
+.hint{font-size:13px;color:var(--muted)}
+@media (max-width:560px){.row{grid-template-columns:1fr}}
+</style>
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <h1>Luigi's <span>voice</span> lines</h1>
+    <p class="lede">Every line Luigi says, in the order the game lists them. Play Mario's original, then Luigi's current clip. To change one, pick a clip from Galaxy, 3D World or Luigi's Mansion and press Play pick. When you're done, copy your picks at the bottom and paste them in the chat.</p>
+  </header>
+  <div class="filter"><label for="q">Find a line</label><input id="q" type="search" placeholder="jump, sleep, hurt…"></div>
+  <div class="list" id="list"></div>
+  <section class="out">
+    <div class="hd"><strong>Your picks</strong><button id="copy" class="l">Copy picks</button></div>
+    <pre id="sum">No changes yet.</pre>
+    <span class="hint" id="hint"></span>
+  </section>
+</div>
+<script>
+const D=/*DATA*/;
+const audio=new Audio();
+function play(src){try{audio.pause();audio.src=src;audio.currentTime=0;audio.play().catch(()=>{});}catch(e){}}
+const picks={};
+const list=document.getElementById('list');
+const groups={};
+for(const [id,c] of Object.entries(D.clips)){(groups[c.group]=groups[c.group]||[]).push([id,c]);}
+function curLabel(r){return r.cur;}
+for(const r of D.rows){
+  const el=document.createElement('div');el.className='row';
+  const sel=document.createElement('select');sel.id='pick-'+r.slot;
+  const o0=document.createElement('option');o0.value='';o0.textContent='Keep: '+curLabel(r);sel.appendChild(o0);
+  const fill=()=>{ if(sel.dataset.f) return; sel.dataset.f='1';
+    for(const [g,items] of Object.entries(groups)){const og=document.createElement('optgroup');og.label=g;
+      for(const [id,c] of items){const o=document.createElement('option');o.value=id;o.textContent=c.label;og.appendChild(o);} sel.appendChild(og);} };
+  sel.addEventListener('pointerdown',fill); sel.addEventListener('focus',fill); sel.addEventListener('keydown',fill);
+  el.dataset.k=(r.label+' '+r.name).toLowerCase();
+  el.innerHTML=`<div><div class="name">${r.label}</div><div class="note">${r.name}</div></div><div class="ctl"></div>`;
+  const ctl=el.querySelector('.ctl');
+  const bm=document.createElement('button');bm.className='m';bm.textContent='Mario';bm.onclick=()=>play(r.mario);
+  const bc=document.createElement('button');bc.textContent='Luigi now';
+  bc.onclick=()=>play(r.now);
+  const bp=document.createElement('button');bp.className='l';bp.textContent='Play pick';
+  bp.onclick=()=>{const v=sel.value; if(v&&D.clips[v]) play(D.clips[v].src);};
+  sel.onchange=()=>{picks[r.name]=sel.value?D.clips[sel.value].label.replace(/ \(.*$/,''):undefined;el.classList.toggle('changed',!!sel.value);render(); if(sel.value) play(D.clips[sel.value].src);};
+  ctl.append(bm,bc,sel,bp);list.appendChild(el);
+}
+document.getElementById('q').addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();
+  for(const el of list.children) el.hidden=!!q&&!el.dataset.k.includes(q);});
+function render(){const lines=Object.entries(picks).filter(([k,v])=>v).map(([k,v])=>k+' = '+v);
+  document.getElementById('sum').textContent=lines.length?lines.join('\n'):'No changes yet.';}
+document.getElementById('copy').onclick=()=>{const t=document.getElementById('sum').textContent;const h=document.getElementById('hint');
+  navigator.clipboard.writeText(t).then(()=>{h.textContent='Copied. Paste it in the chat.';}).catch(()=>{const s=window.getSelection(),r=document.createRange();r.selectNodeContents(document.getElementById('sum'));s.removeAllRanges();s.addRange(r);h.textContent='Selected. Press Ctrl+C to copy.';});};
+</script>
