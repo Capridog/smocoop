@@ -1321,6 +1321,7 @@ HOOK_DEFINE_TRAMPOLINE(SystemMessageHolderLabelHook) {
 extern bool AlIsExistFile(const coop::luigi::SafeStr&) asm("_ZN2al11isExistFileERKN4sead14SafeStringBaseIcEE");
 extern bool AlTryLoadFileToBuffer(const coop::luigi::SafeStr&, u8*, u32, s32) asm(
     "_ZN2al19tryLoadFileToBufferERKN4sead14SafeStringBaseIcEEPhji");
+extern const sead::Vector3f* SeEmitterGetPosition(const void*) asm("_ZNK2al9SeEmitter11getPositionEv");
 namespace coop::voice {
 constexpr u32 kPvWsdSize = 19720;
 constexpr u32 kPvCount = 126;
@@ -1348,6 +1349,7 @@ static void Reset() { gKeeperN = 0; gReqN = 0; gInLuigiRequest = false; gInLuigi
 static void AddKeeper(void* k) {
     if (k == nullptr || gKeeperN >= 48) return;
     gKeepers[gKeeperN++] = k;
+    COOP_LOG("voice: Luigi SeKeeper #%d %p", gKeeperN, k);
 }
 static bool IsLuigiKeeper(void* k) {
     for (s32 i = 0; i < gKeeperN; i++) if (gKeepers[i] == k) return true;
@@ -1366,10 +1368,16 @@ static void MarkReq(void* r, bool luigi) {
     }
 }
 static u32 Rd32(const u8* p) { u32 v; std::memcpy(&v, p, 4); return v; }
+static s32 gLogBudget = 40;
 static const void* LuigiWave(const void* wsd, u32 index) {
     if (!gLoaded || wsd == nullptr || index >= kPvCount) return nullptr;
     const u8* w = static_cast<const u8*>(wsd);
-    if (Rd32(w) != 0x44535746 /* FWSD */ || Rd32(w + 0xc) != kPvWsdSize) return nullptr;
+    if (Rd32(w) != 0x44535746 /* FWSD */ || Rd32(w + 0xc) != kPvWsdSize) {
+        if (gLogBudget > 0 && Rd32(w + 0xc) > 19000 && Rd32(w + 0xc) < 21000) {
+            gLogBudget--; COOP_LOG("voice: wsd size %u idx %u (not voice file?)", Rd32(w + 0xc), index);
+        }
+        return nullptr;
+    }
     // FWAR: section refs at 0x14 (INFO) and 0x20 (FILE): {u16 id, u16 pad, u32 offset, u32 size}
     const u8* info = gWar + Rd32(gWar + 0x18) + 8;
     if (index >= Rd32(info)) return nullptr;
@@ -1377,6 +1385,20 @@ static const void* LuigiWave(const void* wsd, u32 index) {
     s32 off; std::memcpy(&off, e + 4, 4);
     if (off < 0 || Rd32(e + 8) == 0) return nullptr;
     return gWar + Rd32(gWar + 0x24) + 8 + off;
+}
+// Fallback when the request was not tagged: the emitter's position is at Luigi (not at Mario).
+static bool NearLuigi(void* emitter) {
+    if (emitter == nullptr || coop::gP1 == nullptr || coop::gP2 == nullptr || al::isDead(coop::gP2))
+        return false;
+    const sead::Vector3f* p = SeEmitterGetPosition(emitter);
+    if (p == nullptr) return false;
+    const sead::Vector3f& l = al::getTrans(coop::gP2);
+    const sead::Vector3f& m = al::getTrans(coop::gP1);
+    auto d2 = [&](const sead::Vector3f& a) {
+        f32 x = p->x - a.x, y = p->y - a.y, z = p->z - a.z; return x * x + y * y + z * z; };
+    f32 dl = d2(l);
+    if (dl == 0.0f && p->x == 0.0f && p->y == 0.0f && p->z == 0.0f) return false;
+    return dl < d2(m) && dl < 400.0f * 400.0f;
 }
 }  // namespace coop::voice
 
@@ -1405,7 +1427,9 @@ HOOK_DEFINE_TRAMPOLINE(SeRequestSetNewHook) {
 HOOK_DEFINE_TRAMPOLINE(SeRequestPlayStartHook) {
     static u64 Callback(void* req, void* player) {
         bool prev = coop::voice::gInLuigiPlay;
-        coop::voice::gInLuigiPlay = coop::voice::FindReq(req) >= 0;
+        bool luigi = coop::voice::FindReq(req) >= 0;
+        if (!luigi) luigi = coop::voice::NearLuigi(*reinterpret_cast<void**>(static_cast<u8*>(req) + 0x48));
+        coop::voice::gInLuigiPlay = luigi;
         u64 r = Orig(req, player);
         coop::voice::gInLuigiPlay = prev;
         return r;
@@ -1414,7 +1438,15 @@ HOOK_DEFINE_TRAMPOLINE(SeRequestPlayStartHook) {
 HOOK_DEFINE_TRAMPOLINE(GetWaveFileOfWaveSoundHook) {
     static const void* Callback(const void* wsd, u32 index, const void* archive, const void* loader) {
         if (coop::voice::gInLuigiPlay) {
-            if (const void* w = coop::voice::LuigiWave(wsd, index)) return w;
+            const void* w = coop::voice::LuigiWave(wsd, index);
+            if (coop::voice::gLogBudget > 0) {
+                coop::voice::gLogBudget--;
+                COOP_LOG("voice: Luigi wave idx %u -> %s", index, w ? "swapped" : "kept");
+            }
+            if (w) return w;
+        } else if (coop::voice::gLogBudget > 20 && wsd != nullptr) {
+            u32 sz; std::memcpy(&sz, static_cast<const u8*>(wsd) + 0xc, 4);
+            if (sz == coop::voice::kPvWsdSize) { coop::voice::gLogBudget--; COOP_LOG("voice: Mario voice idx %u", index); }
         }
         return Orig(wsd, index, archive, loader);
     }
