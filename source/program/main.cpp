@@ -237,12 +237,16 @@ static void Reset();
 namespace coop::closet {
 static void Reset();
 }  // namespace coop::closet
+namespace coop::dim {
+static void Reset();
+}  // namespace coop::dim
 
 // ---------------------------------------------------------------------------- spawning (step 2)
 
 HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
     static void Callback(StageScene* scene, const al::SceneInitInfo& info) {
         coop::ResetStageState();
+        coop::dim::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
         coop::gClosetStartP2 = coop::gClosetStartP2Pending;
@@ -1134,6 +1138,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneDtorHook) {
         coop::echo::Reset();
         coop::hud::Reset();
         coop::closet::Reset();
+        coop::dim::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
         COOP_LOG("StageScene destroyed: co-op state cleared");
@@ -2345,6 +2350,41 @@ static void Update() {
 }
 }  // namespace coop::collide
 
+// ------------------------------------------------------------------------ leaving 2D together
+// When one brother leaves an 8-bit wall section (rs::isPlayer2D goes false) while the other is
+// still in it, bring the other one out too: after the leader's pop-out (~0.5 s) he is placed
+// beside him in 3D; outside the 2D area his dimension keeper switches him back to 3D. Pipe exits
+// are left to the pipe follow (echo).
+extern bool GameIsPlayer2D(const al::LiveActor*) asm("_ZN2rs10isPlayer2DEPKN2al9LiveActorE");
+namespace coop::dim {
+static bool gWas2D[2] = {false, false};
+static s32 gTimer = 0;
+static s32 gLeader = -1;
+static void Update() {
+    bool now[2];
+    for (s32 i = 0; i < 2; i++) {
+        al::LiveActor* p = PlayerAt(i);
+        now[i] = p != nullptr && !al::isDead(p) && GameIsPlayer2D(p);
+    }
+    for (s32 i = 0; i < 2; i++) {
+        if (gWas2D[i] && !now[i] && now[1 - i] && !coop::echo::Active() &&
+            gBubbleBusy[1 - i] == 0 && gTimer == 0) {
+            gLeader = i;
+            gTimer = 30;
+            COOP_LOG("2D: P%d left the wall section, bringing P%d out", i + 1, 2 - i);
+        }
+    }
+    if (gTimer > 0 && --gTimer == 0 && gLeader >= 0) {
+        s32 f = 1 - gLeader;
+        if (now[f] && !now[gLeader]) PlaceBeside(PlayerAt(f), PlayerAt(gLeader), "left 2D together");
+        gLeader = -1;
+    }
+    gWas2D[0] = now[0];
+    gWas2D[1] = now[1];
+}
+static void Reset() { gWas2D[0] = gWas2D[1] = false; gTimer = 0; gLeader = -1; }
+}  // namespace coop::dim
+
 HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
     static void Callback(StageScene* scene) {
         Orig(scene);
@@ -2354,6 +2394,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return;
 
         coop::collide::Update();
+        coop::dim::Update();
         if (coop::gLeadP2) {
             bool demo = rs::isActiveDemo(coop::gP1) || rs::isActiveDemo(coop::gP2);
             ++coop::gLeadFrames;
