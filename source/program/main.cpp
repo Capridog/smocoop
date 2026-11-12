@@ -1506,39 +1506,109 @@ static s32 BubbleSlot(const void* state) {
     return actor == coop::gP1 ? 0 : 1;
 }
 
+// 3D World bubble. PlayerStateRecoveryDead::exeRecovery (0x479884, Ghidra) moves the player each
+// frame by setting velocity = path(step / flightFrames) - trans, and when step >= flightFrames
+// (+0x74) it snaps to the path end and goes to the Fall nerve (exeFall: endRecovery, then fall with
+// gravity until on ground). For co-op bubbles:
+//  - flightFrames is made huge, so the bubble never lands by itself;
+//  - after the vanilla update we replace the velocity: the bubble drifts gently to a spot beside
+//    the brother it is rescued by and keeps following him;
+//  - it pops only when that brother touches it: on that frame the path is collapsed onto the
+//    bubble's position (start +0x50 = pos, horizontal +0x68 = 0, arc +0x48/+0x4c = 0,
+//    flightFrames = current step), so the vanilla end puts him right there and he drops down.
+constexpr float kBubbleHover = 90.0f;      // height above the rescuer's feet
+constexpr float kBubbleSide = 150.0f;      // distance beside him
+constexpr float kBubbleTouch = 130.0f;     // rescuer within this distance pops it
+constexpr float kBubbleEase = 0.05f;       // fraction of the remaining way per frame
+constexpr float kBubbleMaxSpeed = 12.0f;   // units per frame near the rescuer
+constexpr float kBubbleFarSpeed = 30.0f;   // when far away (catch-up)
+constexpr s32 kBubbleNoPopFrames = 30;
+static bool gBubblePop[2] = {false, false};
+static sead::Vector3f gBubblePopPos[2] = {};
+
+extern void GameSetVelocity(al::LiveActor*, const sead::Vector3f&) asm(
+    "_ZN2al11setVelocityEPNS_9LiveActorERKN4sead7Vector3IfEE");
+
+static sead::Vector3f BubbleHoverPoint(s32 slot, al::LiveActor* rescuer) {
+    const sead::Vector3f& t = al::getTrans(rescuer);
+    sead::Vector3f side = {gAimOffset[slot].x, 0.0f, gAimOffset[slot].z};
+    float len = __builtin_sqrtf(side.x * side.x + side.z * side.z);
+    if (len < 1.0f) {
+        al::calcSideDir(&side, rescuer);
+        side.y = 0.0f;
+        len = __builtin_sqrtf(side.x * side.x + side.z * side.z);
+        if (len < 0.001f) { side = {1.0f, 0.0f, 0.0f}; len = 1.0f; }
+    }
+    return {t.x + side.x / len * kBubbleSide, t.y + kBubbleHover, t.z + side.z / len * kBubbleSide};
+}
+
 HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
     static void Callback(void* state) {
         auto* nerveUser = reinterpret_cast<al::IUseNerve*>(state);
         bool first = al::isFirstStep(nerveUser);
-        al::LiveActor* target = BubbleTargetOfState(state);
+        al::LiveActor* rescuer = BubbleTargetOfState(state);
         s32 slot = BubbleSlot(state);
-        if (!first && target != nullptr) {
-            const sead::Vector3f& t = al::getTrans(target);
-            sead::Vector3f want = {t.x + gAimOffset[slot].x, t.y + gAimOffset[slot].y,
-                                   t.z + gAimOffset[slot].z};
-            sead::Vector3f& aim = gAim[slot];
-            aim.x += (want.x - aim.x) * 0.2f;
-            aim.y += (want.y - aim.y) * 0.2f;
-            aim.z += (want.z - aim.z) * 0.2f;
-            ApplyBubbleAim(state, aim);
+        auto* actor = coop::Field<al::LiveActor*>(state, smo100::ActorStateBase_actor);
+
+        if (!first && rescuer != nullptr && gBubblePop[slot]) {
+            // Collapse the path onto the bubble's position: the vanilla end drops him here.
+            gBubblePop[slot] = false;
+            coop::SetField<sead::Vector3f>(state, smo100::RecoveryDead_start, gBubblePopPos[slot]);
+            coop::SetField<sead::Vector3f>(state, smo100::RecoveryDead_horiz, {0.0f, 0.0f, 0.0f});
+            coop::SetField<float>(state, smo100::RecoveryDead_arcA, 0.0f);
+            coop::SetField<float>(state, smo100::RecoveryDead_arcB, 0.0f);
+            coop::SetField<s32>(state, smo100::RecoveryDead_flightFrames,
+                                al::getNerveStep(nerveUser));
+            auto* sp = coop::Field<PlayerRecoverySafetyPoint*>(state, smo100::RecoveryDead_safetyPoint);
+            sead::Vector3f up1 = {0.0f, 1.0f, 0.0f};
+            sp->setSafetyPoint(gBubblePopPos[slot], up1, nullptr);
+            COOP_LOG("Bubble: P%d popped by P%d", slot + 1, 2 - slot);
+            Orig(state);
+            return;
         }
+
         Orig(state);
-        if (!first) return;
-        if (target != nullptr) {
-            sead::Vector3f spot = coop::FindSpotBeside(target);
-            const sead::Vector3f& t = al::getTrans(target);
+        if (rescuer == nullptr || actor == nullptr) return;
+
+        if (first) {
+            sead::Vector3f spot = coop::FindSpotBeside(rescuer);
+            const sead::Vector3f& t = al::getTrans(rescuer);
             gAimOffset[slot] = {spot.x - t.x, spot.y - t.y, spot.z - t.z};
-            gAim[slot] = spot;
-            ApplyBubbleAim(state, spot);
+            gBubblePop[slot] = false;
+            coop::SetField<s32>(state, smo100::RecoveryDead_flightFrames, 0x3fffffff);
+            s32 spin = coop::Field<s32>(state, smo100::RecoveryDead_spinFrames) / 2;
+            coop::SetField<s32>(state, smo100::RecoveryDead_spinFrames, spin < 1 ? 1 : spin);
+            return;
         }
-        if (CoopBubbleIndexOfState(state) < 0) return;
-        s32 fly = coop::Field<s32>(state, smo100::RecoveryDead_flightFrames) / 2;
-        if (fly < kCoopFlyMin) fly = kCoopFlyMin;
-        if (fly > kCoopFlyMax) fly = kCoopFlyMax;
-        s32 spin = coop::Field<s32>(state, smo100::RecoveryDead_spinFrames) / 2;
-        if (spin < 1) spin = 1;
-        coop::SetField<s32>(state, smo100::RecoveryDead_flightFrames, fly);
-        coop::SetField<s32>(state, smo100::RecoveryDead_spinFrames, spin);
+
+        // Still floating: stay "in a bubble" for the rest of the mod.
+        if (coop::gBubbleBusy[slot] < 60 * 10) coop::gBubbleBusy[slot] = 60 * 10;
+        if (actor == coop::gP1 && coop::gForcedRecovery[0] < 60 * 10) coop::gForcedRecovery[0] = 60 * 10;
+        if (actor == coop::gP2 && coop::gForcedRecovery[1] < 60 * 10) coop::gForcedRecovery[1] = 60 * 10;
+
+        const sead::Vector3f& pos = al::getTrans(actor);
+        sead::Vector3f goal = BubbleHoverPoint(slot, rescuer);
+        sead::Vector3f d = {goal.x - pos.x, goal.y - pos.y, goal.z - pos.z};
+        float dist = __builtin_sqrtf(d.x * d.x + d.y * d.y + d.z * d.z);
+        float speed = dist * kBubbleEase;
+        float cap = dist > 2500.0f ? kBubbleFarSpeed : kBubbleMaxSpeed;
+        if (speed > cap) speed = cap;
+        sead::Vector3f v = {0.0f, 0.0f, 0.0f};
+        if (dist > 0.5f) v = {d.x / dist * speed, d.y / dist * speed, d.z / dist * speed};
+        GameSetVelocity(actor, v);
+
+        // Touch to pop (3D World): the rescuer's body reaches the bubble.
+        if (al::getNerveStep(nerveUser) < kBubbleNoPopFrames || al::isDead(rescuer)) return;
+        s32 rescuerSlot = rescuer == coop::gP1 ? 0 : 1;
+        if (coop::gBubbleBusy[rescuerSlot] > 60) return;  // rescuer is in a bubble himself
+        const sead::Vector3f& r = al::getTrans(rescuer);
+        float dx = r.x - pos.x, dy = (r.y + 80.0f) - (pos.y + 80.0f), dz = r.z - pos.z;
+        if (dx * dx + dy * dy + dz * dz < kBubbleTouch * kBubbleTouch) {
+            sead::Vector3f pp = pos;
+            if (pp.y < r.y + 40.0f) pp.y = r.y + 40.0f;  // never pop below the rescuer's feet
+            gBubblePopPos[slot] = pp;
+            gBubblePop[slot] = true;
+        }
     }
 };
 
