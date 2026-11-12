@@ -21,15 +21,26 @@ def fwav(rate,pcm):
     h+=b'\0'*(0x40-len(h))
     return h+info+dat
 waves={};cache={}
+def src(v,slot):
+    if isinstance(v,list):  # ['SNORE', clip1, clip2]: alternate with gaps up to Mario's length
+        _,m=rd(mario[slot]); target=len(m)/48000.0
+        clips=[rd(x) for x in v[1:]]; r=max(c[0] for c in clips); parts=[];t=0.0;i=0
+        while t<target or i<2:
+            cr,ca=clips[i%len(clips)]
+            ca=np.interp(np.arange(0,len(ca),cr/r),np.arange(len(ca)),ca) if cr!=r else ca
+            parts+= [ca,np.zeros(int(r*0.45),np.float32)]; t+=len(ca)/r+0.45; i+=1
+            if i>40: break
+        return r,np.concatenate(parts)
+    return rd(v if os.path.exists(v) else lpath[v])
 for slot,lk in mapping.items():
-    r,a=rd(lpath[lk])
+    r,a=src(lk,slot)
     nz=np.nonzero(np.abs(a)>300)[0]
     if len(nz):a=a[max(0,nz[0]-int(r*0.005)):]
     _,m=rd(mario[slot])
     g=rms(m)/rms(a); a=a*g
     pk=np.abs(a).max()
     if pk>31000:a*=31000/pk
-    key=(lk,round(g,2))
+    key=(json.dumps(lk),round(g,2))
     if key not in cache: cache[key]=fwav(r,np.round(a).astype(np.int16))
     waves[slot]=key
 N=126

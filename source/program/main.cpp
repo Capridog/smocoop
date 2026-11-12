@@ -1274,6 +1274,14 @@ static void* Get(Entry* tab, s32& n, const char* archive, const char* name) {
     void* h = operator new(0x10);
     GameMessageHolderCtor(h);
     GameMessageHolderInit(h, archive, name);
+    // MessageHolder+8 -> sead::MessageSetBase, whose +8 is the LMS message data. When the Luigi
+    // archive lacks this file the data stays null and every lookup (e.g. Talkatoo's
+    // isExistLabelInStageMessage) dereferences it: crash. Keep using the game's holder then.
+    void* set = *reinterpret_cast<void**>(static_cast<u8*>(h) + 8);
+    if (set == nullptr || *reinterpret_cast<void**>(static_cast<u8*>(set) + 8) == nullptr) {
+        COOP_LOG("Text: no Luigi version of %s, using the original", name);
+        h = nullptr;  // (the half-built holder is leaked once per file; tiny)
+    }
     std::memcpy(tab[n].name, name, len + 1);
     tab[n].holder = h;
     n++;
