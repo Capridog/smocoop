@@ -317,7 +317,16 @@ constexpr u64 EventFlowExecutor_execute_bytes = 0xa9014ff4f81d0ff5ULL;
 constexpr ptrdiff_t rs_getNpcLookPos = 0x55ad2c;  // rs::getNpcLookPos(const al::LiveActor*)
 constexpr u64 rs_getNpcLookPos_bytes = 0x910003fda9bf7bfdULL;
 constexpr ptrdiff_t Closet_control = 0x24e62c;  // Closet::control()
-constexpr u64 Closet_control_bytes = 0xa9017bfdf81e0ff3ULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 Closet_control_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr ptrdiff_t rs_isTriggerUiDecide = 0x575ba8;     // (const al::IUseSceneObjHolder*)
+constexpr u64 rs_isTriggerUiDecide_bytes = 0x910003fda9bf7bfdULL;
+constexpr ptrdiff_t rs_isTriggerUiDecideGdh = 0x575bf8;  // (const GameDataHolder*)
+constexpr u64 rs_isTriggerUiDecideGdh_bytes = 0x910003fda9bf7bfdULL;
+constexpr ptrdiff_t rs_isTriggerUiCancel = 0x575c40;     // (const al::IUseSceneObjHolder*)
+constexpr u64 rs_isTriggerUiCancel_bytes = 0xa9017bfdf81e0ff3ULL;
+// NpcEventCtrlInfo::requestShowBalloonMessage(const NpcEventBalloonInfo&)
+constexpr ptrdiff_t NpcEventCtrlInfo_requestShowBalloonMessage = 0x3a2f10;
+constexpr u64 NpcEventCtrlInfo_requestShowBalloonMessage_bytes = 0x6d0233edd10243ffULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;

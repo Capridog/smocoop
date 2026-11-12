@@ -967,6 +967,68 @@ HOOK_DEFINE_TRAMPOLINE(ClosetControlHook) {
     }
 };
 
+// ------------------------------------------------------------------------ one A button per prompt
+// Ghidra: rs::isTriggerUiDecide(IUseSceneObjHolder*) 0x575ba8 / (GameDataHolder*) 0x575bf8 and
+// rs::isTriggerUiCancel 0x575c40 read GameDataHolder+0x245 (2P mode) directly: when it is on they
+// accept the button from player port 0 OR 1. With co-op on that let Mario confirm Luigi's prompt
+// (and Luigi Mario's). Read only the main controller port instead; MainControllerPortHook makes
+// that Luigi's port while a prompt, talk or wardrobe belongs to him.
+extern bool GameIsPadTriggerA(s32 port) asm("_ZN2al13isPadTriggerAEi");
+extern bool GameIsPadTriggerB(s32 port) asm("_ZN2al13isPadTriggerBEi");
+extern s32 GameMainControllerPort() asm("_ZN2al21getMainControllerPortEv");
+
+HOOK_DEFINE_TRAMPOLINE(UiDecideHook) {
+    static bool Callback(const void* holder) {
+        if (!coop::CoopModeOn(holder)) return Orig(holder);
+        return GameIsPadTriggerA(GameMainControllerPort());
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(UiDecideGdhHook) {
+    static bool Callback(const u8* gdh) {
+        if (gdh == nullptr || gdh[0x245] == 0) return Orig(gdh);
+        return GameIsPadTriggerA(GameMainControllerPort());
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(UiCancelHook) {
+    static bool Callback(const void* holder) {
+        if (!coop::CoopModeOn(holder)) return Orig(holder);
+        return GameIsPadTriggerB(GameMainControllerPort());
+    }
+};
+
+// ------------------------------------------------------------------------ whose prompt is shown
+// The game shows one prompt balloon at a time: NpcEventCtrlInfo::requestShowBalloonMessage
+// (0x3a2f10) keeps one request per frame (owner actor at ctrl+0x38, priority at ctrl+0x6c vs
+// info+0x34). With two brothers, among requests of the same priority keep the one whose brother is
+// closest to his own object, so Luigi's prompt shows when he is at a counter even if Mario is
+// standing near something else.
+static float gReqDist = 0.0f;
+HOOK_DEFINE_TRAMPOLINE(BalloonRequestHook) {
+    static void Callback(u8* ctrl, const u8* info) {
+        if (coop::gP1 == nullptr || coop::gP2 == nullptr || ctrl == nullptr || info == nullptr)
+            return Orig(ctrl, info);
+        al::LiveActor* actor = coop::Field<al::LiveActor*>(info, 0x0);
+        al::LiveActor* who = coop::gToucherIsP2 ? coop::gP2 : coop::gP1;
+        float d = actor ? Dist2(who, actor) : 1e30f;
+        al::LiveActor* cur = coop::Field<al::LiveActor*>(ctrl, 0x38);
+        if (cur == nullptr) {
+            Orig(ctrl, info);
+            if (coop::Field<al::LiveActor*>(ctrl, 0x38) == actor) gReqDist = d;
+            return;
+        }
+        if (coop::Field<s32>(info, 0x34) != coop::Field<s32>(ctrl, 0x6c)) {
+            Orig(ctrl, info);
+            if (coop::Field<al::LiveActor*>(ctrl, 0x38) == actor) gReqDist = d;
+            return;
+        }
+        if (d >= gReqDist) return;  // the current one is closer to its brother
+        coop::SetField<al::LiveActor*>(ctrl, 0x38, nullptr);
+        Orig(ctrl, info);
+        if (coop::Field<al::LiveActor*>(ctrl, 0x38) == actor) gReqDist = d;
+        else coop::SetField<al::LiveActor*>(ctrl, 0x38, cur);  // rejected (off camera etc.)
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -2165,7 +2227,12 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(NpcJointLookAtController_update, NpcJointLookAtController_update_bytes) &&
               CheckBytes(EventFlowExecutor_execute, EventFlowExecutor_execute_bytes) &&
               CheckBytes(rs_getNpcLookPos, rs_getNpcLookPos_bytes) &&
-              CheckBytes(Closet_control, Closet_control_bytes);
+              CheckBytes(Closet_control, Closet_control_bytes) &&
+              CheckBytes(rs_isTriggerUiDecide, rs_isTriggerUiDecide_bytes) &&
+              CheckBytes(rs_isTriggerUiDecideGdh, rs_isTriggerUiDecideGdh_bytes) &&
+              CheckBytes(rs_isTriggerUiCancel, rs_isTriggerUiCancel_bytes) &&
+              CheckBytes(NpcEventCtrlInfo_requestShowBalloonMessage,
+                         NpcEventCtrlInfo_requestShowBalloonMessage_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -2230,6 +2297,10 @@ extern "C" void exl_main(void* x0, void* x1) {
     EventFlowExecuteHook::InstallAtOffset(EventFlowExecutor_execute);
     NpcLookPosHook::InstallAtOffset(rs_getNpcLookPos);
     ClosetControlHook::InstallAtOffset(Closet_control);
+    UiDecideHook::InstallAtOffset(rs_isTriggerUiDecide);
+    UiDecideGdhHook::InstallAtOffset(rs_isTriggerUiDecideGdh);
+    UiCancelHook::InstallAtOffset(rs_isTriggerUiCancel);
+    BalloonRequestHook::InstallAtOffset(NpcEventCtrlInfo_requestShowBalloonMessage);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
