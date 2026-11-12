@@ -2631,6 +2631,7 @@ static void CapHop() {
 static void Update() {
     for (s32 i = 0; i < 2; i++) if (gBounceCooldown[i] > 0) gBounceCooldown[i]--;
     if (gP1 == nullptr || gP2 == nullptr || gGameOver || gLeadP2 || gTalkP2) return;
+    if (!gP2Placed) return;  // no pushing apart while Luigi is still being placed at stage start
     if (rs::isActiveDemo(gP1) || rs::isActiveDemo(gP2)) return;
     CapHop();
     if (!Free(0) || !Free(1)) return;
@@ -2752,8 +2753,29 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
             coop::gP2Placed = true;
         }
         if (coop::gP2Placed) return;
+        if (coop::gFramesSinceInit == 0) {
+            // Both spawn on the same start point. Put Luigi beside Mario from the very first frame
+            // (3D World style) so they never appear inside each other and slide apart.
+            sead::Vector3f pre = coop::FindSpotBesideP1();  // ground-checked spot next to him
+            al::resetPosition(coop::gP2, pre);
+            al::setVelocityZero(coop::gP2);
+            coop::gIgnoreJumps = 3;
+        }
         if (++coop::gFramesSinceInit > 60 * 20) { coop::gP2Placed = true; return; }
         if (!rs::isPlayerOnGround(coop::gP1)) return;
+        {
+            // Already standing next to Mario: keep him where he is (no visible snap).
+            const sead::Vector3f& a = al::getTrans(coop::gP1);
+            const sead::Vector3f& b = al::getTrans(coop::gP2);
+            float dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+            float h2 = dx * dx + dz * dz;
+            if (rs::isPlayerOnGround(coop::gP2) && h2 > 60.0f * 60.0f && h2 < 300.0f * 300.0f &&
+                dy * dy < 80.0f * 80.0f) {
+                coop::gP2Placed = true;
+                COOP_LOG("P2 already beside P1 at stage start");
+                return;
+            }
+        }
         coop::PlaceP2BesideP1("stage start");
         coop::gP2Placed = true;
     }
