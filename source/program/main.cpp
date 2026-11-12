@@ -1122,6 +1122,25 @@ HOOK_DEFINE_TRAMPOLINE(ShopWearAppearHook) {
     }
 };
 
+// Leaving a stage: StageScene::~StageScene (D2 0x4c8474). Other scenes run afterwards (e.g.
+// DemoChangeWorldScene, the Odyssey flight between kingdoms) while our camera hooks
+// (PlayerCameraTarget::calcTrans, CameraPoser::makeLookAtCamera) still run every frame; with
+// gP1/gP2 pointing at the destroyed players they read freed memory (crash in CameraDirector::
+// update). Forget everything about the old stage before it is freed.
+HOOK_DEFINE_TRAMPOLINE(StageSceneDtorHook) {
+    static void* Callback(void* scene) {
+        coop::ResetStageState();
+        coop::cam::Reset();
+        coop::echo::Reset();
+        coop::hud::Reset();
+        coop::closet::Reset();
+        coop::gClosetP2 = false;
+        coop::gUiPortP2 = false;
+        COOP_LOG("StageScene destroyed: co-op state cleared");
+        return Orig(scene);
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -2471,7 +2490,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(StageSceneStateGetShine_kill, StageSceneStateGetShine_kill_bytes) &&
               CheckBytes(PlayerHolder_tryGetPlayer, PlayerHolder_tryGetPlayer_bytes) &&
               CheckBytes(PlayerHolder_getPlayer, PlayerHolder_getPlayer_bytes) &&
-              CheckBytes(ShoppingWatcherStateWear_appear, ShoppingWatcherStateWear_appear_bytes);
+              CheckBytes(ShoppingWatcherStateWear_appear, ShoppingWatcherStateWear_appear_bytes) &&
+              CheckBytes(StageScene_dtor, StageScene_dtor_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -2545,6 +2565,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     HolderTryGetPlayerHook::InstallAtOffset(PlayerHolder_tryGetPlayer);
     HolderGetPlayerHook::InstallAtOffset(PlayerHolder_getPlayer);
     ShopWearAppearHook::InstallAtOffset(ShoppingWatcherStateWear_appear);
+    StageSceneDtorHook::InstallAtOffset(StageScene_dtor);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
