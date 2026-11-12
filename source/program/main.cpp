@@ -857,6 +857,20 @@ HOOK_DEFINE_TRAMPOLINE(DemoEndHook) {
         return ret;
     }
 };
+
+// RC car (Metro Kingdom): driving it is a capture of the RC man; StageScene::exeDemoHackStart and
+// StageSceneStateRadicon::exeRadicon switch to / keep the RC view only while
+// rs::isPlayerHackRadiconNpc(rs::getPlayerActor(scene)) (player 0) is true (Ghidra 0x4cef3c,
+// 0x4ee9f4). The car already reads its capturer's own stick. Report true for Mario's side while
+// Luigi is the one driving, so Luigi gets the RC view and race too.
+HOOK_DEFINE_TRAMPOLINE(IsPlayerHackRadiconHook) {
+    static bool Callback(const al::LiveActor* actor) {
+        bool r = Orig(actor);
+        if (!r && actor != nullptr && actor == coop::gP1 && coop::gP2 != nullptr && !al::isDead(coop::gP2))
+            return Orig(coop::gP2);
+        return r;
+    }
+};
 // ------------------------------------------------------------------------ captures for both
 // Ghidra: a capture starts a HackStart demo: PlayerHackKeeper::startHackStartDemo(Puppetable)
 // (0x449274/0x4492b8) -> rs::requestStartDemoHackStart -> ProjectDemoDirector::requestStartDemo
@@ -3104,7 +3118,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(MapObjStatePlayerHold_tryStartCarryFront, MapObjStatePlayerHold_tryStart_bytes) &&
               CheckBytes(MapObjStatePlayerHold_tryStartCarryFrontWallKeep, MapObjStatePlayerHold_tryStart_bytes) &&
               CheckBytes(MapObjStatePlayerHold_tryStartCarryUp, MapObjStatePlayerHold_tryStart_bytes) &&
-              CheckBytes(al_getPlayerPos_actor, al_getPlayerPos_actor_bytes);
+              CheckBytes(al_getPlayerPos_actor, al_getPlayerPos_actor_bytes) &&
+              CheckBytes(rs_isPlayerHackRadiconNpc, rs_isPlayerHackRadiconNpc_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -3193,6 +3208,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     CarryFrontWallKeepHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryFrontWallKeep);
     CarryUpHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryUp);
     AlGetPlayerPosHook::InstallAtOffset(al_getPlayerPos_actor);
+    IsPlayerHackRadiconHook::InstallAtOffset(rs_isPlayerHackRadiconNpc);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
