@@ -1,6 +1,7 @@
 #include "lib.hpp"
 #include "program/game.hpp"
 #include "program/boss_vtables.hpp"
+#include "program/enemy_vtables.hpp"
 #include "program/loggers.hpp"
 
 #include <cstring>
@@ -1725,7 +1726,7 @@ static al::LiveActor* HolderOf(const al::LiveActor* obj) {
 CARRY_HOOK(CarryFrontHook)
 CARRY_HOOK(CarryFrontWallKeepHook)
 CARRY_HOOK(CarryUpHook)
-// ------------------------------------------------------------------------ bosses (3D World)
+// ------------------------------------------------------------------------ bosses and enemies (3D World)
 // Bosses aim at "player 0" through rs::getPlayerPos / getPlayerBodyPos / getPlayerVelocity ->
 // al::getPlayerActor(boss, 0) (Ghidra: 0x56f608, 0x56f678, 0x56fa7c), so vanilla they only ever go
 // after Mario. In 3D World a boss goes after the nearer brother: each boss actor keeps a target,
@@ -1733,15 +1734,20 @@ CARRY_HOOK(CarryUpHook)
 // at once when its target is down or in a bubble. Cutscenes keep the vanilla answer.
 namespace coop::boss {
 struct Slot { const al::LiveActor* boss; al::LiveActor* target; s32 since; };
-static Slot gSlots[32];
+static Slot gSlots[96];
 static s32 gFrame = 0;
 static void Reset() { for (auto& s : gSlots) s = {nullptr, nullptr, 0}; gFrame = 0; }
+template <size_t N>
+static bool InTable(const u64 (&t)[N], u64 vt) {
+    s32 lo = 0, hi = N - 1;
+    while (lo <= hi) { s32 m = (lo + hi) / 2; if (t[m] == vt) return true;
+        if (t[m] < vt) lo = m + 1; else hi = m - 1; }
+    return false;
+}
+// Bosses and the regular enemies that aim at player 0 (enemy_vtables.hpp) share the same rule.
 static bool IsBoss(const al::LiveActor* a) {
     u64 vt = *reinterpret_cast<const u64*>(a) - exl::util::modules::GetTargetStart();
-    s32 lo = 0, hi = sizeof(kBossVtables) / sizeof(kBossVtables[0]) - 1;
-    while (lo <= hi) { s32 m = (lo + hi) / 2; if (kBossVtables[m] == vt) return true;
-        if (kBossVtables[m] < vt) lo = m + 1; else hi = m - 1; }
-    return false;
+    return InTable(kBossVtables, vt) || InTable(kEnemyVtables, vt);
 }
 static bool Usable(s32 i) {
     al::LiveActor* p = coop::PlayerAt(i);
@@ -1759,7 +1765,7 @@ static al::LiveActor* Target(const al::LiveActor* boss) {
     for (auto& e : gSlots) if (e.boss == boss) { s = &e; break; }
     if (s == nullptr) {
         for (auto& e : gSlots) if (e.boss == nullptr) { s = &e; break; }
-        if (s == nullptr) s = &gSlots[gFrame & 31];
+        if (s == nullptr) s = &gSlots[gFrame % 96];
         *s = {boss, nullptr, gFrame};
     }
     bool ok0 = Usable(0), ok1 = Usable(1);
@@ -1779,12 +1785,17 @@ static al::LiveActor* Target(const al::LiveActor* boss) {
 static al::LiveActor* RedirectOwnPlayer(const al::LiveActor* caller, s32 index) {
     if (auto* l = LeadSwap(caller, index)) return l;
     if (index != 0 || coop::gP2 == nullptr || caller == nullptr) return nullptr;
-    if (auto* b = coop::boss::Target(caller)) return b == coop::gP1 ? nullptr : b;
-    if (auto* h = coop::carry::HolderOf(caller)) return h == coop::gP1 ? nullptr : h;
     if (coop::gToucherIsP2) return coop::gP2;
     if (coop::gNpcTarget == coop::gP2) return coop::gP2;
     if (caller == coop::gP2 || caller == coop::gP2Cap) return coop::gP2;
     if (caller == coop::P2HackActor()) return coop::gP2;
+    if (coop::gP1 != nullptr) {  // Mario's own pieces (and what he is capturing) stay vanilla
+        void* keeper = coop::Field<void*>(coop::gP1, smo100::PlayerActorHakoniwa_hackKeeper);
+        al::LiveActor* p1Hack = keeper ? coop::Field<al::LiveActor*>(keeper, smo100::PlayerHackKeeper_hackActor) : nullptr;
+        if (caller == coop::gP1 || (p1Hack != nullptr && caller == p1Hack)) return nullptr;
+    }
+    if (auto* b = coop::boss::Target(caller)) return b == coop::gP1 ? nullptr : b;
+    if (auto* h = coop::carry::HolderOf(caller)) return h == coop::gP1 ? nullptr : h;
     return nullptr;
 }
 
