@@ -345,7 +345,18 @@ constexpr u64 MessageSystem_getStageMessageHolder_bytes = 0x71000d1fb9400808ULL;
 constexpr ptrdiff_t MessageSystem_getSystemMessageHolder = 0x93cbbc;   // (const char*)
 constexpr u64 MessageSystem_getSystemMessageHolder_bytes = 0x34000088b9400808ULL;
 constexpr ptrdiff_t MessageSystem_getSystemMessageHolder2 = 0x93ce40;  // (const char*, const char*)
-constexpr u64 MessageSystem_getSystemMessageHolder2_bytes = 0x34000088b9400808ULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 MessageSystem_getSystemMessageHolder2_bytes = 0x34000088b9400808ULL;
+// Luigi's voice: SE request path and the nn::atk wave lookup used while preparing a wave sound
+constexpr ptrdiff_t al_SeKeeper_create = 0x9e65e8;  // static SeKeeper* create(...)
+constexpr u64 al_SeKeeper_create_bytes = 0xa9015ff8a9bb67faULL;
+constexpr ptrdiff_t al_SeKeeper_requestPlaySeIdLocal = 0x9e7888;
+constexpr u64 al_SeKeeper_requestPlaySeIdLocal_bytes = 0xa9017bfda9be4ff4ULL;
+constexpr ptrdiff_t al_SeRequest_setNew = 0xa98a80;
+constexpr u64 al_SeRequest_setNew_bytes = 0xa90157f6f81c0ff7ULL;
+constexpr ptrdiff_t al_SeRequest_playStart = 0xa98314;
+constexpr u64 al_SeRequest_playStart_bytes = 0xa9017bfda9be4ff4ULL;
+constexpr ptrdiff_t atk_Util_GetWaveFileOfWaveSound = 0xac02c0;
+constexpr u64 atk_Util_GetWaveFileOfWaveSound_bytes = 0xf90033f5d10243ffULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;

@@ -244,6 +244,10 @@ static void Reset();
 namespace coop::text {
 static void Reset();
 }  // namespace coop::text
+namespace coop::voice {
+static void Reset();
+static void Load();
+}  // namespace coop::voice
 
 // ---------------------------------------------------------------------------- spawning (step 2)
 
@@ -327,6 +331,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
     static void Callback(StageScene* scene, const al::SceneInitInfo& info) {
         coop::ResetStageState();
         coop::outfit::Load();
+        coop::voice::Load();
         if (coop::gOutfitDirty) { coop::gOutfitDirty = false; coop::outfit::Save(); }
         coop::dim::Reset();
         coop::gClosetP2 = false;
@@ -1222,6 +1227,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneDtorHook) {
         coop::closet::Reset();
         coop::dim::Reset();
         coop::text::Reset();
+        coop::voice::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
         COOP_LOG("StageScene destroyed: co-op state cleared");
@@ -1304,6 +1310,115 @@ HOOK_DEFINE_TRAMPOLINE(SystemMessageHolderLabelHook) {
     }
 };
 
+// ------------------------------------------------------------------------ Luigi's voice
+// Mario's voice lines are wave sounds in one wave-sound file of SeData.bfsar (FWSD, 19720
+// bytes, 126 sounds WsPvDummy..WsPvWaitCold13). nn::atk resolves each clip synchronously while
+// starting the sound: SeRequest::playStart -> SeadAudioPlayer::startAudio -> ... ->
+// WaveSoundRuntime::PrepareImpl -> Util::GetWaveFileOfWaveSound(wsd, index, ...). When the request
+// came from one of Luigi's SeKeepers, hand back the clip at that index from our own wave archive
+// (romfs SoundData/P2LuigiPv.bfwar, built from the Super Mario 3D World Luigi set). Slots that
+// archive leaves empty keep Mario's clip.
+extern bool AlIsExistFile(const coop::luigi::SafeStr&) asm("_ZN2al11isExistFileERKN4sead14SafeStringBaseIcEE");
+extern bool AlTryLoadFileToBuffer(const coop::luigi::SafeStr&, u8*, u32, s32) asm(
+    "_ZN2al19tryLoadFileToBufferERKN4sead14SafeStringBaseIcEEPhji");
+namespace coop::voice {
+constexpr u32 kPvWsdSize = 19720;
+constexpr u32 kPvCount = 126;
+alignas(0x1000) static u8 gWar[6 << 20];
+static bool gTried = false, gLoaded = false;
+static void* gKeepers[48];
+static s32 gKeeperN = 0;
+static void* gReqs[96];  // SeRequests currently filled from a Luigi keeper
+static s32 gReqN = 0;
+static bool gInLuigiRequest = false;
+static bool gInLuigiPlay = false;
+
+static void Load() {
+    if (gTried) return;
+    gTried = true;
+    coop::luigi::SafeStr path = coop::luigi::MakeSafe("SoundData/P2LuigiPv.bfwar");
+    if (!AlIsExistFile(path)) { COOP_LOG("voice: P2LuigiPv.bfwar missing"); return; }
+    gLoaded = AlTryLoadFileToBuffer(path, gWar, sizeof(gWar), 0x40);
+    u32 magic;
+    std::memcpy(&magic, gWar, 4);
+    if (gLoaded && magic != 0x52415746) gLoaded = false;  // "FWAR"
+    COOP_LOG("voice: Luigi archive %s", gLoaded ? "loaded" : "failed");
+}
+static void Reset() { gKeeperN = 0; gReqN = 0; gInLuigiRequest = false; gInLuigiPlay = false; }
+static void AddKeeper(void* k) {
+    if (k == nullptr || gKeeperN >= 48) return;
+    gKeepers[gKeeperN++] = k;
+}
+static bool IsLuigiKeeper(void* k) {
+    for (s32 i = 0; i < gKeeperN; i++) if (gKeepers[i] == k) return true;
+    return false;
+}
+static s32 FindReq(void* r) {
+    for (s32 i = 0; i < gReqN; i++) if (gReqs[i] == r) return i;
+    return -1;
+}
+static void MarkReq(void* r, bool luigi) {
+    s32 i = FindReq(r);
+    if (luigi) {
+        if (i < 0 && gReqN < 96) gReqs[gReqN++] = r;
+    } else if (i >= 0) {
+        gReqs[i] = gReqs[--gReqN];
+    }
+}
+static u32 Rd32(const u8* p) { u32 v; std::memcpy(&v, p, 4); return v; }
+static const void* LuigiWave(const void* wsd, u32 index) {
+    if (!gLoaded || wsd == nullptr || index >= kPvCount) return nullptr;
+    const u8* w = static_cast<const u8*>(wsd);
+    if (Rd32(w) != 0x44535746 /* FWSD */ || Rd32(w + 0xc) != kPvWsdSize) return nullptr;
+    // FWAR: section refs at 0x14 (INFO) and 0x20 (FILE): {u16 id, u16 pad, u32 offset, u32 size}
+    const u8* info = gWar + Rd32(gWar + 0x18) + 8;
+    if (index >= Rd32(info)) return nullptr;
+    const u8* e = info + 4 + 12 * index;
+    s32 off; std::memcpy(&off, e + 4, 4);
+    if (off < 0 || Rd32(e + 8) == 0) return nullptr;
+    return gWar + Rd32(gWar + 0x24) + 8 + off;
+}
+}  // namespace coop::voice
+
+HOOK_DEFINE_TRAMPOLINE(SeKeeperCreateHook) {
+    static void* Callback(void* a, void* b, const char* c, void* d, void* e, void* f, void* g) {
+        void* k = Orig(a, b, c, d, e, f, g);
+        if (coop::gSpawningP2) coop::voice::AddKeeper(k);
+        return k;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(SeKeeperRequestIdLocalHook) {
+    static u64 Callback(void* keeper, void* param, const char* name) {
+        bool prev = coop::voice::gInLuigiRequest;
+        coop::voice::gInLuigiRequest = coop::voice::IsLuigiKeeper(keeper);
+        u64 r = Orig(keeper, param, name);
+        coop::voice::gInLuigiRequest = prev;
+        return r;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(SeRequestSetNewHook) {
+    static void Callback(void* req, const void* param, s32 a) {
+        Orig(req, param, a);
+        coop::voice::MarkReq(req, coop::voice::gInLuigiRequest);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(SeRequestPlayStartHook) {
+    static u64 Callback(void* req, void* player) {
+        bool prev = coop::voice::gInLuigiPlay;
+        coop::voice::gInLuigiPlay = coop::voice::FindReq(req) >= 0;
+        u64 r = Orig(req, player);
+        coop::voice::gInLuigiPlay = prev;
+        return r;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(GetWaveFileOfWaveSoundHook) {
+    static const void* Callback(const void* wsd, u32 index, const void* archive, const void* loader) {
+        if (coop::voice::gInLuigiPlay) {
+            if (const void* w = coop::voice::LuigiWave(wsd, index)) return w;
+        }
+        return Orig(wsd, index, archive, loader);
+    }
+};
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -2697,7 +2812,12 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(StageScene_dtor, StageScene_dtor_bytes) &&
               CheckBytes(MessageSystem_getStageMessageHolder, MessageSystem_getStageMessageHolder_bytes) &&
               CheckBytes(MessageSystem_getSystemMessageHolder, MessageSystem_getSystemMessageHolder_bytes) &&
-              CheckBytes(MessageSystem_getSystemMessageHolder2, MessageSystem_getSystemMessageHolder2_bytes);
+              CheckBytes(MessageSystem_getSystemMessageHolder2, MessageSystem_getSystemMessageHolder2_bytes) &&
+              CheckBytes(al_SeKeeper_create, al_SeKeeper_create_bytes) &&
+              CheckBytes(al_SeKeeper_requestPlaySeIdLocal, al_SeKeeper_requestPlaySeIdLocal_bytes) &&
+              CheckBytes(al_SeRequest_setNew, al_SeRequest_setNew_bytes) &&
+              CheckBytes(al_SeRequest_playStart, al_SeRequest_playStart_bytes) &&
+              CheckBytes(atk_Util_GetWaveFileOfWaveSound, atk_Util_GetWaveFileOfWaveSound_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -2775,6 +2895,11 @@ extern "C" void exl_main(void* x0, void* x1) {
     StageMessageHolderHook::InstallAtOffset(MessageSystem_getStageMessageHolder);
     SystemMessageHolderHook::InstallAtOffset(MessageSystem_getSystemMessageHolder);
     SystemMessageHolderLabelHook::InstallAtOffset(MessageSystem_getSystemMessageHolder2);
+    SeKeeperCreateHook::InstallAtOffset(al_SeKeeper_create);
+    SeKeeperRequestIdLocalHook::InstallAtOffset(al_SeKeeper_requestPlaySeIdLocal);
+    SeRequestSetNewHook::InstallAtOffset(al_SeRequest_setNew);
+    SeRequestPlayStartHook::InstallAtOffset(al_SeRequest_playStart);
+    GetWaveFileOfWaveSoundHook::InstallAtOffset(atk_Util_GetWaveFileOfWaveSound);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
