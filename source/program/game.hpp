@@ -304,7 +304,14 @@ constexpr ptrdiff_t PartsModel_initPartsFixFileNoRegister = 0x96cd78;
 constexpr u64 PartsModel_initPartsFixFileNoRegister_bytes = 0xfd005be8d103c3ffULL;
 // rs::isSeparatePlay(const al::IUseSceneObjHolder*) -> SMO's 2P mode flag
 constexpr ptrdiff_t rs_isSeparatePlay = 0x575af4;
-constexpr u64 rs_isSeparatePlay_bytes = 0x910003fda9bf7bfdULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 rs_isSeparatePlay_bytes = 0x910003fda9bf7bfdULL;
+constexpr ptrdiff_t NpcEventDirector_updateBalloon = 0x3a3ee4;
+constexpr u64 NpcEventDirector_updateBalloon_bytes = 0x6d063befd10403ffULL;
+// rs::checkTriggerDecideWithRequestIcon(al::LiveActor*, const sead::Vector3f&, float) (f in s0)
+constexpr ptrdiff_t rs_checkTriggerDecideWithRequestIcon = 0x55b2fc;
+constexpr u64 rs_checkTriggerDecideWithRequestIcon_bytes = 0xa9074ff4d10243ffULL;
+constexpr ptrdiff_t NpcJointLookAtController_update = 0x3a65c4;
+constexpr u64 NpcJointLookAtController_update_bytes = 0xfd0013e8d10143ffULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;

@@ -820,6 +820,71 @@ static void CheckModeSwitch(StageScene* scene) {
 }
 }  // namespace coop
 
+// ------------------------------------------------------------------------ prompts + gaze for P2
+// The "A" prompt and NPC gaze are decided from player 0's point of view in a few places
+// (Ghidra 1.0.0):
+//  - NpcEventDirector::updateBalloon (0x3a3ee4) pops the requested balloon (owner actor stored
+//    in NpcEventCtrlInfo+0x38, ctrl at director+0x40) and hides/shows it from rs::getPlayerPos /
+//    area checks of player 0.
+//  - rs::checkTriggerDecideWithRequestIcon (0x55b2fc): talk-ground check, balloon request and
+//    the "decide" button, all for player 0 (signs, hint art, music lists, wardrobe...).
+//  - NpcJointLookAtController::update (0x3a65c4): looks at the sensor stored in its
+//    PlayerEyeSensorHitHolder (+0x28 -> holder, holder+0x30 = HitSensor, HitSensor+0 = name);
+//    it only switches when the other sensor is strictly nearer, so it sticks to Mario.
+// When P2 is the nearer brother, run these from P2's side.
+static bool P2Nearer(const al::LiveActor* actor) {
+    return coop::gP1 != nullptr && coop::gP2 != nullptr && actor != nullptr &&
+           !al::isDead(coop::gP2) && Dist2(coop::gP2, actor) < Dist2(coop::gP1, actor);
+}
+
+HOOK_DEFINE_TRAMPOLINE(UpdateBalloonHook) {
+    static void Callback(u8* director) {
+        u8* ctrl = coop::Field<u8*>(director, 0x40);
+        al::LiveActor* owner = ctrl ? coop::Field<al::LiveActor*>(ctrl, 0x38) : nullptr;
+        if (coop::gTalkP2 || !P2Nearer(owner)) return Orig(director);
+        bool prevT = coop::gToucherIsP2;
+        coop::gToucherIsP2 = true;
+        Orig(director);
+        coop::gToucherIsP2 = prevT;
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(DecideWithIconHook) {
+    static bool Callback(float radius, al::LiveActor* actor, const sead::Vector3f& offset) {
+        if (coop::gToucherIsP2 || !P2Nearer(actor)) return Orig(radius, actor, offset);
+        bool prevT = coop::gToucherIsP2, prevU = coop::gUiPortP2;
+        coop::gToucherIsP2 = true;
+        coop::gUiPortP2 = true;
+        bool r = Orig(radius, actor, offset);
+        coop::gToucherIsP2 = prevT;
+        coop::gUiPortP2 = prevU;
+        return r;
+    }
+};
+
+extern al::HitSensor* GameGetHitSensor(const al::LiveActor*, const char*) asm(
+    "_ZN2al12getHitSensorEPKNS_9LiveActorEPKc");
+
+HOOK_DEFINE_TRAMPOLINE(NpcLookAtUpdateHook) {
+    static void Callback(u8* ctl) {
+        al::LiveActor* npc = coop::Field<al::LiveActor*>(ctl, 0x8);
+        u8* holder = coop::Field<u8*>(ctl, 0x28);
+        if (npc != nullptr && holder != nullptr && coop::gP1 != nullptr && coop::gP2 != nullptr) {
+            al::HitSensor* cur = coop::Field<al::HitSensor*>(holder, 0x30);
+            if (cur != nullptr) {
+                al::LiveActor* host = al::getSensorHost(cur);
+                al::LiveActor* want = coop::gTalkP2 ? coop::gP2 : (P2Nearer(npc) ? coop::gP2 : coop::gP1);
+                if ((host == coop::gP1 || host == coop::gP2) && host != want) {
+                    const char* name = coop::Field<const char*>(cur, 0x0);
+                    al::HitSensor* alt = name ? GameGetHitSensor(want, name) : nullptr;
+                    if (alt != nullptr) coop::SetField(holder, 0x30, alt);
+                }
+            }
+        }
+        Orig(ctl);
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -1930,7 +1995,11 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(TalkNpc_movement, TalkNpc_movement_bytes) &&
               CheckBytes(PartsModel_initPartsFixFileNoRegister,
                          PartsModel_initPartsFixFileNoRegister_bytes) &&
-              CheckBytes(rs_isSeparatePlay, rs_isSeparatePlay_bytes);
+              CheckBytes(rs_isSeparatePlay, rs_isSeparatePlay_bytes) &&
+              CheckBytes(NpcEventDirector_updateBalloon, NpcEventDirector_updateBalloon_bytes) &&
+              CheckBytes(rs_checkTriggerDecideWithRequestIcon,
+                         rs_checkTriggerDecideWithRequestIcon_bytes) &&
+              CheckBytes(NpcJointLookAtController_update, NpcJointLookAtController_update_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1989,6 +2058,9 @@ extern "C" void exl_main(void* x0, void* x1) {
     TalkNpcMovementHook::InstallAtOffset(TalkNpc_movement);
     PartsFixInitHook::InstallAtOffset(PartsModel_initPartsFixFileNoRegister);
     SeparatePlayHook::InstallAtOffset(rs_isSeparatePlay);
+    UpdateBalloonHook::InstallAtOffset(NpcEventDirector_updateBalloon);
+    DecideWithIconHook::InstallAtOffset(rs_checkTriggerDecideWithRequestIcon);
+    NpcLookAtUpdateHook::InstallAtOffset(NpcJointLookAtController_update);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
