@@ -2,6 +2,7 @@
 #include "program/game.hpp"
 #include "program/boss_vtables.hpp"
 #include "program/enemy_vtables.hpp"
+#include "program/aware_vtables.hpp"
 #include "program/loggers.hpp"
 
 #include <cstring>
@@ -1745,9 +1746,13 @@ static bool InTable(const u64 (&t)[N], u64 vt) {
     return false;
 }
 // Bosses and the regular enemies that aim at player 0 (enemy_vtables.hpp) share the same rule.
-static bool IsBoss(const al::LiveActor* a) {
+// 0 = not handled, 1 = boss/enemy (holds its target), 2 = creature that reacts to whoever is
+// nearest right now (runs away, flees, notices: rabbits, sheep, birds, the dog, hide-and-seek).
+static s32 Kind(const al::LiveActor* a) {
     u64 vt = *reinterpret_cast<const u64*>(a) - exl::util::modules::GetTargetStart();
-    return InTable(kBossVtables, vt) || InTable(kEnemyVtables, vt);
+    if (InTable(kBossVtables, vt) || InTable(kEnemyVtables, vt)) return 1;
+    if (InTable(kAwareVtables, vt)) return 2;
+    return 0;
 }
 static bool Usable(s32 i) {
     al::LiveActor* p = coop::PlayerAt(i);
@@ -1760,7 +1765,8 @@ static float Dist2(const al::LiveActor* a, const al::LiveActor* b) {
 static al::LiveActor* Target(const al::LiveActor* boss) {
     if (coop::gP1 == nullptr || coop::gP2 == nullptr || coop::gGameOver) return nullptr;
     if (rs::isActiveDemo(coop::gP1) || rs::isActiveDemo(coop::gP2)) return nullptr;
-    if (!IsBoss(boss)) return nullptr;
+    s32 kind = Kind(boss);
+    if (kind == 0) return nullptr;
     Slot* s = nullptr;
     for (auto& e : gSlots) if (e.boss == boss) { s = &e; break; }
     if (s == nullptr) {
@@ -1774,9 +1780,10 @@ static al::LiveActor* Target(const al::LiveActor* boss) {
     al::LiveActor* nearer = d0 <= d1 ? coop::gP1 : coop::gP2;
     s32 cur = s->target == coop::gP1 ? 0 : (s->target == coop::gP2 ? 1 : -1);
     if (cur < 0 || !(cur == 0 ? ok0 : ok1)) { s->target = nearer; s->since = gFrame; }
-    else if (s->target != nearer && gFrame - s->since > 180) {
+    else if (s->target != nearer && gFrame - s->since > (kind == 1 ? 180 : 20)) {
         float dc = cur == 0 ? d0 : d1, dn = cur == 0 ? d1 : d0;
-        if (dn < dc * 0.42f) { s->target = nearer; s->since = gFrame; }  // other is ~35% closer
+        // bosses/enemies: other ~35% closer; creatures: ~15% closer
+        if (dn < dc * (kind == 1 ? 0.42f : 0.72f)) { s->target = nearer; s->since = gFrame; }
     }
     return s->target;
 }
