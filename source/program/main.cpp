@@ -261,6 +261,10 @@ static void Reset();
 namespace coop::carry {
 static void Reset();
 }  // namespace coop::carry
+namespace coop::flag {
+static void Reset();
+static void Update();
+}  // namespace coop::flag
 
 // ---------------------------------------------------------------------------- spawning (step 2)
 
@@ -402,7 +406,10 @@ static bool InList(const char* const* list, size_t n, const char* key) {
 }
 
 // "ObjectData/MarioHead" -> "ObjectData/P2Luigi/P2LuigiHead" (only if the Luigi file exists).
+static bool gLuigiFlagInit = false;  // building the green L checkpoint flag twin
 static const char* Redirect(const char* name) {
+    if (gLuigiFlagInit && name != nullptr && std::strcmp(name, "ObjectData/CheckpointFlag") == 0)
+        return "ObjectData/P2Luigi/P2Luigi_CheckpointFlag";
     if (!(gSpawningP2 || gLuigiCloset) || name == nullptr) return nullptr;
     constexpr const char kDir[] = "ObjectData/";
     if (std::strncmp(name, kDir, sizeof(kDir) - 1) != 0) return nullptr;
@@ -871,6 +878,160 @@ HOOK_DEFINE_TRAMPOLINE(IsPlayerHackRadiconHook) {
         return r;
     }
 };
+
+// ------------------------------------------------------------------------ Luigi's checkpoint flags
+// 3D World style: a checkpoint flag Luigi touches shows his green L. CheckpointFlag::receiveMsg
+// (Ghidra 0x249ae0) sets the Get nerve (module 0x1ce6d30) when a player activates it; the sender
+// sensor's host is who touched it. Each flag gets a twin model built from the Luigi pack's
+// P2Luigi_CheckpointFlag archive (same rig and actions, green L mark); for Luigi's flags the
+// original model is hidden and the twin follows its pose and action frame. Luigi's flags are
+// remembered by position in sd:/OdysseyCoop/luigiflags.txt.
+extern void LiveActorCtor(void*, const char*) asm("_ZN2al9LiveActorC1EPKc");
+extern al::LiveActor* AlGetSensorHost(const void*) asm("_ZN2al13getSensorHostEPKNS_9HitSensorE");
+extern void LiveActorMakeAlive(void*) asm("_ZN2al9LiveActor14makeActorAliveEv");
+extern void LiveActorMakeDead(void*) asm("_ZN2al9LiveActor13makeActorDeadEv");
+extern void AlInitActorWithArchiveName(al::LiveActor*, const void*, const coop::luigi::SafeStr&, const char*) asm(
+    "_ZN2al24initActorWithArchiveNameEPNS_9LiveActorERKNS_13ActorInitInfoERKN4sead14SafeStringBaseIcEEPKc");
+extern bool AlIsNerve(const void*, const void*) asm("_ZN2al7isNerveEPKNS_9IUseNerveEPKNS_5NerveE");
+extern const char* AlGetActionName(const al::LiveActor*) asm("_ZN2al13getActionNameEPKNS_9LiveActorE");
+extern float AlGetActionFrame(const al::LiveActor*) asm("_ZN2al14getActionFrameEPKNS_9LiveActorE");
+extern void AlSetActionFrame(al::LiveActor*, float) asm("_ZN2al14setActionFrameEPNS_9LiveActorEf");
+extern void AlStartAction(al::LiveActor*, const char*) asm("_ZN2al11startActionEPNS_9LiveActorEPKc");
+extern void AlCopyPose(al::LiveActor*, const al::LiveActor*) asm("_ZN2al8copyPoseEPNS_9LiveActorEPKS0_");
+extern void AlHideModelIfShow(al::LiveActor*) asm("_ZN2al15hideModelIfShowEPNS_9LiveActorE");
+namespace coop::flag {
+constexpr const char* kFile = "sd:/OdysseyCoop/luigiflags.txt";
+struct Key { s32 x, y, z; };
+static Key gKeys[256];
+static s32 gKeyN = 0;
+static bool gKeysLoaded = false;
+struct Pair { al::LiveActor* flag; al::LiveActor* twin; bool luigi; };
+static Pair gPairs[64];
+static s32 gPairN = 0;
+static void Reset() { gPairN = 0; }
+static Key KeyOf(const al::LiveActor* f) {
+    const sead::Vector3f& t = al::getTrans(f);
+    return {(s32)t.x, (s32)t.y, (s32)t.z};
+}
+static s32 Find(const Key& k) {
+    for (s32 i = 0; i < gKeyN; i++)
+        if (gKeys[i].x == k.x && gKeys[i].y == k.y && gKeys[i].z == k.z) return i;
+    return -1;
+}
+static void LoadKeys() {
+    if (gKeysLoaded) return;
+    gKeysLoaded = true;
+    if (!coop::outfit::Mount()) return;
+    FsHandle h{};
+    if (FsOpenFile(&h, kFile, 1) != 0) return;
+    static char buf[8192];
+    u64 got = 0;
+    FsReadFile(&got, h, 0, buf, sizeof(buf) - 1);
+    FsCloseFile(h);
+    buf[got < sizeof(buf) ? got : sizeof(buf) - 1] = 0;
+    const char* c = buf;
+    while (*c && gKeyN < 256) {
+        s32 v[3] = {0, 0, 0};
+        for (s32 i = 0; i < 3; i++) {
+            while (*c == ' ' || *c == '\n' || *c == '\r') c++;
+            bool neg = *c == '-'; if (neg) c++;
+            s32 x = 0; bool any = false;
+            while (*c >= '0' && *c <= '9') { x = x * 10 + (*c - '0'); c++; any = true; }
+            if (!any) { c = ""; break; }
+            v[i] = neg ? -x : x;
+        }
+        if (!*c && v[0] == 0 && v[1] == 0 && v[2] == 0) break;
+        gKeys[gKeyN++] = {v[0], v[1], v[2]};
+    }
+    COOP_LOG("Luigi flags: %d remembered", gKeyN);
+}
+static void SaveKeys() {
+    if (!coop::outfit::Mount()) return;
+    static char buf[8192];
+    u64 len = 0;
+    for (s32 i = 0; i < gKeyN && len + 40 < sizeof(buf); i++) {
+        s32 v[3] = {gKeys[i].x, gKeys[i].y, gKeys[i].z};
+        for (s32 j = 0; j < 3; j++) {
+            s32 x = v[j];
+            if (x < 0) { buf[len++] = '-'; x = -x; }
+            char tmp[12]; s32 n = 0;
+            do { tmp[n++] = '0' + x % 10; x /= 10; } while (x);
+            while (n) buf[len++] = tmp[--n];
+            buf[len++] = j < 2 ? ' ' : '\n';
+        }
+    }
+    FsCreateDirectory(coop::outfit::kDir);
+    FsDeleteFile(kFile);
+    if (FsCreateFile(kFile, (s64)len) != 0) return;
+    FsHandle h{};
+    if (FsOpenFile(&h, kFile, 2) != 0) return;
+    FsWriteOption opt{1};
+    FsWriteFile(h, 0, buf, len, opt);
+    FsFlushFile(h);
+    FsCloseFile(h);
+}
+static Pair* PairOf(const al::LiveActor* f) {
+    for (s32 i = 0; i < gPairN; i++) if (gPairs[i].flag == f) return &gPairs[i];
+    return nullptr;
+}
+static void CreateTwin(al::LiveActor* flag, const void* info) {
+    // Flags can be placed before the players; build the twin whenever 2P mode is on.
+    if (gPairN >= 64 || !coop::CoopModeOn(reinterpret_cast<const u8*>(flag) + 0x20)) return;
+    LoadKeys();
+    void* mem = operator new(0x200);
+    std::memset(mem, 0, 0x200);
+    LiveActorCtor(mem, "P2LuigiCheckpointFlag");
+    auto* twin = static_cast<al::LiveActor*>(mem);
+    coop::luigi::gLuigiFlagInit = true;
+    AlInitActorWithArchiveName(twin, info, coop::luigi::MakeSafe("CheckpointFlag"), nullptr);
+    coop::luigi::gLuigiFlagInit = false;
+    LiveActorMakeDead(twin);
+    gPairs[gPairN++] = {flag, twin, Find(KeyOf(flag)) >= 0};
+}
+static void SetOwner(al::LiveActor* flag, bool luigi) {
+    Pair* p = PairOf(flag);
+    if (p != nullptr) p->luigi = luigi;
+    Key k = KeyOf(flag);
+    s32 i = Find(k);
+    if (luigi && i < 0 && gKeyN < 256) { gKeys[gKeyN++] = k; SaveKeys(); }
+    if (!luigi && i >= 0) { gKeys[i] = gKeys[--gKeyN]; SaveKeys(); }
+    COOP_LOG("Checkpoint flag taken by %s", luigi ? "Luigi" : "Mario");
+}
+static void Update() {
+    for (s32 i = 0; i < gPairN; i++) {
+        Pair& p = gPairs[i];
+        if (!p.luigi || p.twin == nullptr) continue;
+        if (al::isDead(p.flag)) { if (!al::isDead(p.twin)) LiveActorMakeDead(p.twin); continue; }
+        if (al::isDead(p.twin)) LiveActorMakeAlive(p.twin);
+        AlCopyPose(p.twin, p.flag);
+        const char* a = AlGetActionName(p.flag);
+        const char* b = AlGetActionName(p.twin);
+        if (a != nullptr && (b == nullptr || std::strcmp(a, b) != 0)) AlStartAction(p.twin, a);
+        AlSetActionFrame(p.twin, AlGetActionFrame(p.flag));
+        AlHideModelIfShow(p.flag);
+    }
+}
+}  // namespace coop::flag
+HOOK_DEFINE_TRAMPOLINE(CheckpointFlagInitHook) {
+    static void Callback(al::LiveActor* flag, const void* info) {
+        Orig(flag, info);
+        coop::flag::CreateTwin(flag, info);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(CheckpointFlagReceiveMsgHook) {
+    static bool Callback(al::LiveActor* flag, const void* msg, void* other, void* self) {
+        const void* get = reinterpret_cast<const void*>(exl::util::modules::GetTargetStart() +
+                                                        smo100::CheckpointFlag_nrvGet);
+        bool was = AlIsNerve(flag, get);
+        bool r = Orig(flag, msg, other, self);
+        if (!was && AlIsNerve(flag, get) && coop::gP2 != nullptr) {
+            al::LiveActor* who = other ? AlGetSensorHost(other) : nullptr;
+            bool luigi = who != nullptr && (who == coop::gP2 || who == coop::gP2Cap || who == coop::P2HackActor());
+            coop::flag::SetOwner(flag, luigi);
+        }
+        return r;
+    }
+};
 // ------------------------------------------------------------------------ captures for both
 // Ghidra: a capture starts a HackStart demo: PlayerHackKeeper::startHackStartDemo(Puppetable)
 // (0x449274/0x4492b8) -> rs::requestStartDemoHackStart -> ProjectDemoDirector::requestStartDemo
@@ -1301,6 +1462,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneDtorHook) {
         coop::boss::Reset();
         coop::cut::Reset();
         coop::carry::Reset();
+        coop::flag::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
         COOP_LOG("StageScene destroyed: co-op state cleared");
@@ -2945,6 +3107,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return;
 
         coop::collide::Update();
+        coop::flag::Update();
         coop::dim::Update();
         if (coop::gLeadP2) {
             bool demo = rs::isActiveDemo(coop::gP1) || rs::isActiveDemo(coop::gP2);
@@ -3119,7 +3282,9 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(MapObjStatePlayerHold_tryStartCarryFrontWallKeep, MapObjStatePlayerHold_tryStart_bytes) &&
               CheckBytes(MapObjStatePlayerHold_tryStartCarryUp, MapObjStatePlayerHold_tryStart_bytes) &&
               CheckBytes(al_getPlayerPos_actor, al_getPlayerPos_actor_bytes) &&
-              CheckBytes(rs_isPlayerHackRadiconNpc, rs_isPlayerHackRadiconNpc_bytes);
+              CheckBytes(rs_isPlayerHackRadiconNpc, rs_isPlayerHackRadiconNpc_bytes) &&
+              CheckBytes(CheckpointFlag_init, CheckpointFlag_init_bytes) &&
+              CheckBytes(CheckpointFlag_receiveMsg, CheckpointFlag_receiveMsg_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -3209,6 +3374,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     CarryUpHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryUp);
     AlGetPlayerPosHook::InstallAtOffset(al_getPlayerPos_actor);
     IsPlayerHackRadiconHook::InstallAtOffset(rs_isPlayerHackRadiconNpc);
+    CheckpointFlagInitHook::InstallAtOffset(CheckpointFlag_init);
+    CheckpointFlagReceiveMsgHook::InstallAtOffset(CheckpointFlag_receiveMsg);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
