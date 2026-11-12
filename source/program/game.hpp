@@ -339,7 +339,13 @@ constexpr u64 PlayerHolder_getPlayer_bytes = 0x937c7c29f9400008ULL;
 constexpr ptrdiff_t ShoppingWatcherStateWear_appear = 0x316a88;
 constexpr u64 ShoppingWatcherStateWear_appear_bytes = 0xa9017bfda9be4ff4ULL;
 constexpr ptrdiff_t StageScene_dtor = 0x4c8474;  // StageScene::~StageScene() (D1 == D2)
-constexpr u64 StageScene_dtor_bytes = 0xa9014ff4f81d0ff5ULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 StageScene_dtor_bytes = 0xa9014ff4f81d0ff5ULL;
+constexpr ptrdiff_t MessageSystem_getStageMessageHolder = 0x93d208;    // (const char*)
+constexpr u64 MessageSystem_getStageMessageHolder_bytes = 0x71000d1fb9400808ULL;
+constexpr ptrdiff_t MessageSystem_getSystemMessageHolder = 0x93cbbc;   // (const char*)
+constexpr u64 MessageSystem_getSystemMessageHolder_bytes = 0x34000088b9400808ULL;
+constexpr ptrdiff_t MessageSystem_getSystemMessageHolder2 = 0x93ce40;  // (const char*, const char*)
+constexpr u64 MessageSystem_getSystemMessageHolder2_bytes = 0x34000088b9400808ULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;

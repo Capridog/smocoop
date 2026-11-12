@@ -35,6 +35,7 @@ static bool gToucherIsP2 = false;   // a pipe is processing P2's touch right now
 // Wardrobe for P2. P2's outfit lives here (not in the save file); empty = same as P1.
 static char gP2Costume[64] = {};
 static char gP2CapName[64] = {};
+static bool gOutfitDirty = false;  // save Luigi's outfit file at the next stage load
 static bool gClosetP2 = false;   // P2 is using the wardrobe right now (Closet bind -> state kill)
 static bool gUiPortP2 = false;   // al::getMainControllerPort answers P2's port
 static bool gLuigiCloset = false;
@@ -240,12 +241,93 @@ static void Reset();
 namespace coop::dim {
 static void Reset();
 }  // namespace coop::dim
+namespace coop::text {
+static void Reset();
+}  // namespace coop::text
 
 // ---------------------------------------------------------------------------- spawning (step 2)
+
+// ------------------------------------------------------------------------ Luigi's outfit file
+// Luigi's outfit is not in the game's save file; it is kept in sd:/OdysseyCoop/p2outfit.txt
+// ("body\ncap\n") through the SDK's nn::fs (imported from the sdk module).
+struct FsHandle { u64 v; };
+struct FsWriteOption { s32 flags; };
+extern u32 FsMountSd(const char*) asm("_ZN2nn2fs19MountSdCardForDebugEPKc");
+extern u32 FsCreateDirectory(const char*) asm("_ZN2nn2fs15CreateDirectoryEPKc");
+extern u32 FsCreateFile(const char*, s64) asm("_ZN2nn2fs10CreateFileEPKcl");
+extern u32 FsDeleteFile(const char*) asm("_ZN2nn2fs10DeleteFileEPKc");
+extern u32 FsOpenFile(FsHandle*, const char*, s32) asm("_ZN2nn2fs8OpenFileEPNS0_10FileHandleEPKci");
+extern u32 FsReadFile(u64*, FsHandle, s64, void*, u64) asm("_ZN2nn2fs8ReadFileEPmNS0_10FileHandleElPvm");
+extern u32 FsWriteFile(FsHandle, s64, const void*, u64, const FsWriteOption&) asm(
+    "_ZN2nn2fs9WriteFileENS0_10FileHandleElPKvmRKNS0_11WriteOptionE");
+extern u32 FsFlushFile(FsHandle) asm("_ZN2nn2fs9FlushFileENS0_10FileHandleE");
+extern void FsCloseFile(FsHandle) asm("_ZN2nn2fs9CloseFileENS0_10FileHandleE");
+
+namespace coop::outfit {
+constexpr const char* kDir = "sd:/OdysseyCoop";
+constexpr const char* kFile = "sd:/OdysseyCoop/p2outfit.txt";
+static bool gMounted = false;
+static bool gLoaded = false;
+
+static bool Mount() {
+    if (gMounted) return true;
+    u32 rc = FsMountSd("sd");
+    gMounted = rc == 0;
+    if (!gMounted) COOP_LOG("Outfit file: SD card mount failed (0x%x)", rc);
+    return gMounted;
+}
+
+static void Load() {
+    if (gLoaded) return;
+    gLoaded = true;
+    if (!Mount()) return;
+    FsHandle h{};
+    if (FsOpenFile(&h, kFile, 1) != 0) { COOP_LOG("Outfit file: none yet"); return; }
+    char buf[160] = {};
+    u64 got = 0;
+    FsReadFile(&got, h, 0, buf, sizeof(buf) - 1);
+    FsCloseFile(h);
+    buf[got < sizeof(buf) ? got : sizeof(buf) - 1] = 0;
+    char* nl = nullptr;
+    for (char* c = buf; *c; c++) if (*c == '\n') { nl = c; break; }
+    if (nl == nullptr) return;
+    *nl = 0;
+    char* cap = nl + 1;
+    for (char* c = cap; *c; c++) if (*c == '\n' || *c == '\r') { *c = 0; break; }
+    size_t nb = std::strlen(buf), nc = std::strlen(cap);
+    if (nb > 0 && nb < 64) std::memcpy(gP2Costume, buf, nb + 1);
+    if (nc > 0 && nc < 64) std::memcpy(gP2CapName, cap, nc + 1);
+    COOP_LOG("Outfit file: Luigi wears %s / %s", gP2Costume, gP2CapName);
+}
+
+static void Save() {
+    if (!Mount()) return;
+    char buf[160];
+    size_t nb = std::strlen(gP2Costume), nc = std::strlen(gP2CapName);
+    if (nb + nc + 2 >= sizeof(buf)) return;
+    std::memcpy(buf, gP2Costume, nb);
+    buf[nb] = '\n';
+    std::memcpy(buf + nb + 1, gP2CapName, nc);
+    buf[nb + 1 + nc] = '\n';
+    u64 len = nb + nc + 2;
+    FsCreateDirectory(kDir);
+    FsDeleteFile(kFile);
+    if (FsCreateFile(kFile, (s64)len) != 0) { COOP_LOG("Outfit file: create failed"); return; }
+    FsHandle h{};
+    if (FsOpenFile(&h, kFile, 2) != 0) { COOP_LOG("Outfit file: open failed"); return; }
+    FsWriteOption opt{1};
+    FsWriteFile(h, 0, buf, len, opt);
+    FsFlushFile(h);
+    FsCloseFile(h);
+    COOP_LOG("Outfit file: saved %s / %s", gP2Costume, gP2CapName);
+}
+}  // namespace coop::outfit
 
 HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
     static void Callback(StageScene* scene, const al::SceneInitInfo& info) {
         coop::ResetStageState();
+        coop::outfit::Load();
+        if (coop::gOutfitDirty) { coop::gOutfitDirty = false; coop::outfit::Save(); }
         coop::dim::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
@@ -1139,10 +1221,86 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneDtorHook) {
         coop::hud::Reset();
         coop::closet::Reset();
         coop::dim::Reset();
+        coop::text::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
         COOP_LOG("StageScene destroyed: co-op state cleared");
         return Orig(scene);
+    }
+};
+
+// ------------------------------------------------------------------------ "Luigi" in dialogue
+// Ghidra: text is fetched through al::MessageSystem::getStageMessageHolder(name) (0x93d208) and
+// getSystemMessageHolder(name) (0x93cbbc) / (name, label) (0x93ce40) every time (no caching);
+// a MessageHolder (0x10 bytes, C1 0x938f10) is filled by MessageHolder::init(archivePath, file)
+// (0x938fc8: findOrCreateResource(archivePath) + "<file>.msbt"). The Luigi pack has
+// LocalizedData/USen/MessageData/P2Luigi_StageMessage / P2Luigi_SystemMessage with the same
+// files where the player is "Luigi" (CharacterName.msbt etc.). While Luigi leads a conversation,
+// hand out holders built from those archives (English only; other languages stay vanilla).
+extern void GameMessageHolderCtor(void*) asm("_ZN2al13MessageHolderC1Ev");
+extern void GameMessageHolderInit(void*, const char*, const char*) asm(
+    "_ZN2al13MessageHolder4initEPKcS2_");
+extern const char16_t* GameMessageHolderTryGetText(const void*, const char*) asm(
+    "_ZNK2al13MessageHolder10tryGetTextEPKc");
+extern const char* GameLanguageString() asm("_ZN2al17getLanguageStringEv");
+namespace coop::text {
+struct Entry { char name[64]; void* holder; };
+static Entry gStage[96];
+static Entry gSystem[96];
+static s32 gStageN = 0, gSystemN = 0;
+static s32 gEnglish = -1;
+static void Reset() { gStageN = gSystemN = 0; }
+static bool Enabled() {
+    if (!gTalkP2 || gP2 == nullptr) return false;
+    if (gEnglish < 0) {
+        const char* l = GameLanguageString();
+        gEnglish = (l != nullptr && std::strcmp(l, "USen") == 0) ? 1 : 0;
+        COOP_LOG("Text: language %s, Luigi dialogue %s", l ? l : "?", gEnglish ? "on" : "off");
+    }
+    return gEnglish == 1;
+}
+static void* Get(Entry* tab, s32& n, const char* archive, const char* name) {
+    if (name == nullptr) return nullptr;
+    size_t len = std::strlen(name);
+    if (len == 0 || len >= 64) return nullptr;
+    for (s32 i = 0; i < n; i++) if (std::strcmp(tab[i].name, name) == 0) return tab[i].holder;
+    if (n >= 96) return nullptr;
+    void* h = operator new(0x10);
+    GameMessageHolderCtor(h);
+    GameMessageHolderInit(h, archive, name);
+    std::memcpy(tab[n].name, name, len + 1);
+    tab[n].holder = h;
+    n++;
+    return h;
+}
+}  // namespace coop::text
+
+HOOK_DEFINE_TRAMPOLINE(StageMessageHolderHook) {
+    static void* Callback(const void* sys, const char* name) {
+        void* van = Orig(sys, name);
+        if (van == nullptr || !coop::text::Enabled()) return van;
+        void* l = coop::text::Get(coop::text::gStage, coop::text::gStageN,
+                                  "LocalizedData/USen/MessageData/P2Luigi_StageMessage", name);
+        return l ? l : van;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(SystemMessageHolderHook) {
+    static void* Callback(const void* sys, const char* name) {
+        void* van = Orig(sys, name);
+        if (van == nullptr || !coop::text::Enabled()) return van;
+        void* l = coop::text::Get(coop::text::gSystem, coop::text::gSystemN,
+                                  "LocalizedData/USen/MessageData/P2Luigi_SystemMessage", name);
+        return l ? l : van;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(SystemMessageHolderLabelHook) {
+    static void* Callback(const void* sys, const char* name, const char* label) {
+        void* van = Orig(sys, name, label);
+        if (van == nullptr || !coop::text::Enabled()) return van;
+        void* l = coop::text::Get(coop::text::gSystem, coop::text::gSystemN,
+                                  "LocalizedData/USen/MessageData/P2Luigi_SystemMessage", name);
+        if (l == nullptr || (label && GameMessageHolderTryGetText(l, label) == nullptr)) return van;
+        return l;
     }
 };
 
@@ -1177,12 +1335,14 @@ HOOK_DEFINE_TRAMPOLINE(WearCostumeHook) {
             CopyName(coop::gP2Costume, name);
             coop::gClosetStartP2Pending = true;
             COOP_LOG("Shop: Luigi wears his new body %s (Mario keeps his)", coop::gP2Costume);
+            coop::gOutfitDirty = true;
             return true;
         }
         if (coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0))) {
             CopyName(coop::gP2Costume, name);
             coop::gClosetStartP2Pending = true;
             COOP_LOG("Wardrobe: P2 body -> %s (save file untouched)", coop::gP2Costume);
+            coop::gOutfitDirty = true;
             return true;
         }
         return Orig(writer, name);
@@ -1196,12 +1356,14 @@ HOOK_DEFINE_TRAMPOLINE(WearCapHook) {
             CopyName(coop::gP2CapName, name);
             coop::gClosetStartP2Pending = true;
             COOP_LOG("Shop: Luigi wears his new cap %s (Mario keeps his)", coop::gP2CapName);
+            coop::gOutfitDirty = true;
             return true;
         }
         if (coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0))) {
             CopyName(coop::gP2CapName, name);
             coop::gClosetStartP2Pending = true;
             COOP_LOG("Wardrobe: P2 cap -> %s (save file untouched)", coop::gP2CapName);
+            coop::gOutfitDirty = true;
             return true;
         }
         return Orig(writer, name);
@@ -2532,7 +2694,10 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(PlayerHolder_tryGetPlayer, PlayerHolder_tryGetPlayer_bytes) &&
               CheckBytes(PlayerHolder_getPlayer, PlayerHolder_getPlayer_bytes) &&
               CheckBytes(ShoppingWatcherStateWear_appear, ShoppingWatcherStateWear_appear_bytes) &&
-              CheckBytes(StageScene_dtor, StageScene_dtor_bytes);
+              CheckBytes(StageScene_dtor, StageScene_dtor_bytes) &&
+              CheckBytes(MessageSystem_getStageMessageHolder, MessageSystem_getStageMessageHolder_bytes) &&
+              CheckBytes(MessageSystem_getSystemMessageHolder, MessageSystem_getSystemMessageHolder_bytes) &&
+              CheckBytes(MessageSystem_getSystemMessageHolder2, MessageSystem_getSystemMessageHolder2_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -2607,6 +2772,9 @@ extern "C" void exl_main(void* x0, void* x1) {
     HolderGetPlayerHook::InstallAtOffset(PlayerHolder_getPlayer);
     ShopWearAppearHook::InstallAtOffset(ShoppingWatcherStateWear_appear);
     StageSceneDtorHook::InstallAtOffset(StageScene_dtor);
+    StageMessageHolderHook::InstallAtOffset(MessageSystem_getStageMessageHolder);
+    SystemMessageHolderHook::InstallAtOffset(MessageSystem_getSystemMessageHolder);
+    SystemMessageHolderLabelHook::InstallAtOffset(MessageSystem_getSystemMessageHolder2);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
