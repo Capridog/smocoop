@@ -38,6 +38,9 @@ static char gP2CapName[64] = {};
 static bool gClosetP2 = false;   // P2 is using the wardrobe right now (Closet bind -> state kill)
 static bool gUiPortP2 = false;   // al::getMainControllerPort answers P2's port
 static bool gLuigiCloset = false;
+static bool gClosetStartP2Pending = false;  // P2 wore something: next stage start is Luigi's
+static bool gClosetStartP2 = false;         // this stage: Luigi steps out of the booth
+static bool gClosetSwapDone = false;
 static bool gTalkP2 = false;
 static al::LiveActor* gNpcTarget = nullptr;   // TalkNpc::movement: who "player 0" is for this NPC
 static al::LiveActor* gHackDemoStarter = nullptr;  // player starting a capture (HackStart demo)
@@ -235,6 +238,9 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
         coop::ResetStageState();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
+        coop::gClosetStartP2 = coop::gClosetStartP2Pending;
+        coop::gClosetStartP2Pending = false;
+        coop::gClosetSwapDone = false;
         coop::closet::Reset();
         coop::cam::Reset();
         coop::echo::Reset();
@@ -589,10 +595,23 @@ HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
 HOOK_DEFINE_TRAMPOLINE(ClosetReceiveMsgHook) {
     static bool Callback(al::LiveActor* self, const al::SensorMsg* msg, al::HitSensor* other,
                          al::HitSensor* own) {
-        if (coop::gP2 == nullptr || other == nullptr || al::getSensorHost(other) != coop::gP2)
+        bool startMode = coop::Field<u8>(self, smo100::Closet_isPlayerStart) != 0;
+        al::LiveActor* host = other ? al::getSensorHost(other) : nullptr;
+        if (startMode && coop::gClosetStartP2 && coop::gP2 != nullptr) {
+            // Luigi changed clothes: he is the one who steps out and poses.
+            if (host == coop::gP1) return false;
+            if (host != coop::gP2) return Orig(self, msg, other, own);
+            if (!coop::gClosetSwapDone) return false;  // wait until Luigi stands at the booth
+            bool prevT = coop::gToucherIsP2;
+            coop::gToucherIsP2 = true;
+            bool r = Orig(self, msg, other, own);
+            coop::gToucherIsP2 = prevT;
+            if (r && al::isMsgBindInit(msg)) COOP_LOG("Wardrobe: Luigi steps out of the booth");
+            return r;
+        }
+        if (coop::gP2 == nullptr || other == nullptr || host != coop::gP2)
             return Orig(self, msg, other, own);
-        if (coop::Field<u8>(self, smo100::Closet_isPlayerStart) != 0)
-            return false;  // after an outfit change the booth belongs to P1
+        if (startMode) return false;  // after Mario's outfit change the booth belongs to P1
         if (coop::gClosetP2 == false && coop::gP2Port < 0) return false;
         // Ghidra: rs::checkTriggerDecideWithRequestIcon -> rs::isPlayerEnableTalkGround(closet)
         // -> al::getPlayerActor(closet, 0), and the balloon request compares rs::getPlayerPos.
@@ -623,7 +642,8 @@ HOOK_DEFINE_TRAMPOLINE(ClosetAttackSensorHook) {
     static bool Callback(al::LiveActor* self, al::HitSensor* own, al::HitSensor* other) {
         if (coop::gP2 == nullptr || other == nullptr || al::getSensorHost(other) != coop::gP2)
             return Orig(self, own, other);
-        if (coop::Field<u8>(self, smo100::Closet_isPlayerStart) != 0) return false;
+        if (coop::Field<u8>(self, smo100::Closet_isPlayerStart) != 0 && !coop::gClosetStartP2)
+            return false;
         bool prev = coop::gUiPortP2, prevT = coop::gToucherIsP2;
         coop::gUiPortP2 = true;
         coop::gToucherIsP2 = true;
@@ -932,6 +952,21 @@ HOOK_DEFINE_TRAMPOLINE(NpcLookPosHook) {
     }
 };
 
+// Closet::control (0x24e62c): in player-start mode its bind sensor follows rs::getPlayerPos(this)
+// (player 0). When Luigi is the one coming out, follow Luigi; stop once the booth is done (+0x118
+// cleared by exeWearEnd).
+HOOK_DEFINE_TRAMPOLINE(ClosetControlHook) {
+    static void Callback(al::LiveActor* self) {
+        if (!coop::gClosetStartP2 || coop::gP2 == nullptr ||
+            coop::Field<u8>(self, smo100::Closet_isPlayerStart) == 0)
+            return Orig(self);
+        bool prevT = coop::gToucherIsP2;
+        coop::gToucherIsP2 = true;
+        Orig(self);
+        coop::gToucherIsP2 = prevT;
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -960,6 +995,7 @@ HOOK_DEFINE_TRAMPOLINE(WearCostumeHook) {
     static bool Callback(void* writer, const char* name) {
         if (coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0))) {
             CopyName(coop::gP2Costume, name);
+            coop::gClosetStartP2Pending = true;
             COOP_LOG("Wardrobe: P2 body -> %s (save file untouched)", coop::gP2Costume);
             return true;
         }
@@ -971,6 +1007,7 @@ HOOK_DEFINE_TRAMPOLINE(WearCapHook) {
     static bool Callback(void* writer, const char* name) {
         if (coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0))) {
             CopyName(coop::gP2CapName, name);
+            coop::gClosetStartP2Pending = true;
             COOP_LOG("Wardrobe: P2 cap -> %s (save file untouched)", coop::gP2CapName);
             return true;
         }
@@ -2026,6 +2063,15 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
             coop::PlaceP2BesideP1("out of hearts");
         }
 
+        if (coop::gClosetStartP2 && !coop::gClosetSwapDone) {
+            // Luigi takes Mario's spot in front of the booth; Mario waits beside him.
+            coop::gClosetSwapDone = true;
+            sead::Vector3f spot = al::getTrans(coop::gP1);
+            al::resetPosition(coop::gP2, spot);
+            al::setVelocityZero(coop::gP2);
+            coop::PlaceBeside(coop::gP1, coop::gP2, "Luigi's outfit change");
+            coop::gP2Placed = true;
+        }
         if (coop::gP2Placed) return;
         if (++coop::gFramesSinceInit > 60 * 20) { coop::gP2Placed = true; return; }
         if (!rs::isPlayerOnGround(coop::gP1)) return;
@@ -2118,7 +2164,8 @@ extern "C" void exl_main(void* x0, void* x1) {
                          rs_checkTriggerDecideWithRequestIcon_bytes) &&
               CheckBytes(NpcJointLookAtController_update, NpcJointLookAtController_update_bytes) &&
               CheckBytes(EventFlowExecutor_execute, EventFlowExecutor_execute_bytes) &&
-              CheckBytes(rs_getNpcLookPos, rs_getNpcLookPos_bytes);
+              CheckBytes(rs_getNpcLookPos, rs_getNpcLookPos_bytes) &&
+              CheckBytes(Closet_control, Closet_control_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -2182,6 +2229,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     NpcLookAtUpdateHook::InstallAtOffset(NpcJointLookAtController_update);
     EventFlowExecuteHook::InstallAtOffset(EventFlowExecutor_execute);
     NpcLookPosHook::InstallAtOffset(rs_getNpcLookPos);
+    ClosetControlHook::InstallAtOffset(Closet_control);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

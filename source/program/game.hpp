@@ -315,7 +315,9 @@ constexpr u64 NpcJointLookAtController_update_bytes = 0xfd0013e8d10143ffULL;
 constexpr ptrdiff_t EventFlowExecutor_execute = 0x88b918;  // al::EventFlowExecutor::execute()
 constexpr u64 EventFlowExecutor_execute_bytes = 0xa9014ff4f81d0ff5ULL;
 constexpr ptrdiff_t rs_getNpcLookPos = 0x55ad2c;  // rs::getNpcLookPos(const al::LiveActor*)
-constexpr u64 rs_getNpcLookPos_bytes = 0x910003fda9bf7bfdULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 rs_getNpcLookPos_bytes = 0x910003fda9bf7bfdULL;
+constexpr ptrdiff_t Closet_control = 0x24e62c;  // Closet::control()
+constexpr u64 Closet_control_bytes = 0xa9017bfdf81e0ff3ULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;
