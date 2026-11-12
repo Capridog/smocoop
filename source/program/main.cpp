@@ -38,7 +38,10 @@ static char gP2CapName[64] = {};
 static bool gClosetP2 = false;   // P2 is using the wardrobe right now (Closet bind -> state kill)
 static bool gUiPortP2 = false;   // al::getMainControllerPort answers P2's port
 static bool gLuigiCloset = false;
-static bool gTalkP2 = false;       // P2 started the current NPC talk (UI follows P2's controller)
+static bool gTalkP2 = false;
+static al::LiveActor* gNpcTarget = nullptr;   // TalkNpc::movement: who "player 0" is for this NPC
+static al::LiveActor* gHackDemoStarter = nullptr;  // player starting a capture (HackStart demo)
+static bool gSkippedHackDemo[2] = {false, false};  // P1/P2 skipped the other's HackStart demo       // P2 started the current NPC talk (UI follows P2's controller)
 static s32 gTalkNoDemoFrames = 0;  // building the wardrobe's Luigi preview models right now
 
 template <typename T>
@@ -63,6 +66,9 @@ static void ResetStageState() {
     gForceP1Death = false;
     gTalkP2 = false;
     gTalkNoDemoFrames = 0;
+    gNpcTarget = nullptr;
+    gHackDemoStarter = nullptr;
+    gSkippedHackDemo[0] = gSkippedHackDemo[1] = false;
 }
 
 // Actor P2 is currently capturing (nullptr if none).
@@ -654,6 +660,93 @@ HOOK_DEFINE_TRAMPOLINE(TryLockTalkDemoHook) {
     }
 };
 
+// ------------------------------------------------------------------------ captures for both
+// Ghidra: a capture starts a HackStart demo: PlayerHackKeeper::startHackStartDemo(Puppetable)
+// (0x449274/0x4492b8) -> rs::requestStartDemoHackStart -> ProjectDemoDirector::requestStartDemo
+// (0xd5978) type 3, which requires isEnableDemo (vptr+0x108 = PlayerActorHakoniwa::isEnableDemo
+// 0x421754) on every player and calls startDemoPuppetable (0x421b84) on every player; ending
+// calls endDemoPuppetable (0x421e2c). startDemoPuppetable -> PlayerHackKeeper::sendMarioDemo:
+// the other brother's captured enemy refuses HackMarioDemo -> sendMsgCancelHack -> he pops out.
+// The capture swoop only concerns the brother capturing: the other one skips that demo.
+static s32 PlayerSlot(const void* actor) {
+    if (actor == nullptr) return -1;
+    if (actor == coop::gP1) return 0;
+    if (actor == coop::gP2) return 1;
+    return -1;
+}
+
+HOOK_DEFINE_TRAMPOLINE(HackStartDemoHook) {
+    static bool Callback(void* keeper, al::LiveActor* actor) {
+        al::LiveActor* prev = coop::gHackDemoStarter;
+        coop::gHackDemoStarter = coop::Field<al::LiveActor*>(keeper, 0x0);
+        bool r = Orig(keeper, actor);
+        coop::gHackDemoStarter = prev;
+        return r;
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(HackStartDemoPuppetableHook) {
+    static bool Callback(void* keeper, al::LiveActor* actor) {
+        al::LiveActor* prev = coop::gHackDemoStarter;
+        coop::gHackDemoStarter = coop::Field<al::LiveActor*>(keeper, 0x0);
+        bool r = Orig(keeper, actor);
+        coop::gHackDemoStarter = prev;
+        return r;
+    }
+};
+
+static bool IsOtherBrotherOfHackDemo(const void* player) {
+    return coop::gHackDemoStarter != nullptr && coop::gP2 != nullptr && PlayerSlot(player) >= 0 &&
+           player != coop::gHackDemoStarter && PlayerSlot(coop::gHackDemoStarter) >= 0;
+}
+
+HOOK_DEFINE_TRAMPOLINE(PlayerIsEnableDemoHook) {
+    static bool Callback(void* player) {
+        if (IsOtherBrotherOfHackDemo(player)) return true;  // doesn't take part, never blocks it
+        return Orig(player);
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(PlayerStartDemoPuppetableHook) {
+    static void Callback(void* player) {
+        if (IsOtherBrotherOfHackDemo(player)) {
+            coop::gSkippedHackDemo[PlayerSlot(player)] = true;
+            COOP_LOG("Capture: %s keeps playing during the other's capture",
+                     player == coop::gP1 ? "P1" : "P2");
+            return;
+        }
+        Orig(player);
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(PlayerEndDemoPuppetableHook) {
+    static void Callback(void* player) {
+        s32 slot = PlayerSlot(player);
+        if (slot >= 0 && coop::gSkippedHackDemo[slot]) {
+            coop::gSkippedHackDemo[slot] = false;
+            return;
+        }
+        Orig(player);
+    }
+};
+
+// ------------------------------------------------------------------------ NPCs face the nearest
+// TalkNpc::movement (0x3ddb38) runs the NPC's look-at, turning and event flow, all asking for
+// player 0. Answer the brother it is talking with, otherwise the nearer brother.
+HOOK_DEFINE_TRAMPOLINE(TalkNpcMovementHook) {
+    static void Callback(al::LiveActor* npc) {
+        if (coop::gP1 == nullptr || coop::gP2 == nullptr) return Orig(npc);
+        al::LiveActor* target;
+        if (coop::gTalkP2) target = coop::gP2;
+        else if (rs::isActiveDemo(coop::gP1)) target = coop::gP1;
+        else target = Dist2(coop::gP2, npc) < Dist2(coop::gP1, npc) ? coop::gP2 : coop::gP1;
+        al::LiveActor* prev = coop::gNpcTarget;
+        coop::gNpcTarget = target;
+        Orig(npc);
+        coop::gNpcTarget = prev;
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -785,6 +878,7 @@ HOOK_DEFINE_TRAMPOLINE(RegisterPlayerHook) {
 static al::LiveActor* RedirectOwnPlayer(const al::LiveActor* caller, s32 index) {
     if (index != 0 || coop::gP2 == nullptr || caller == nullptr) return nullptr;
     if (coop::gToucherIsP2) return coop::gP2;
+    if (coop::gNpcTarget == coop::gP2) return coop::gP2;
     if (caller == coop::gP2 || caller == coop::gP2Cap) return coop::gP2;
     if (caller == coop::P2HackActor()) return coop::gP2;
     return nullptr;
@@ -1746,7 +1840,16 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(Closet_attackSensor, Closet_attackSensor_bytes) &&
               CheckBytes(EventFlowNodeMessageBalloon_exeWait,
                          EventFlowNodeMessageBalloon_exeWait_bytes) &&
-              CheckBytes(rs_tryLockStartEventTalkDemo, rs_tryLockStartEventTalkDemo_bytes);
+              CheckBytes(rs_tryLockStartEventTalkDemo, rs_tryLockStartEventTalkDemo_bytes) &&
+              CheckBytes(PlayerHackKeeper_startHackStartDemo, PlayerHackKeeper_startHackStartDemo_bytes) &&
+              CheckBytes(PlayerHackKeeper_startHackStartDemoPuppetable,
+                         PlayerHackKeeper_startHackStartDemoPuppetable_bytes) &&
+              CheckBytes(PlayerActorHakoniwa_isEnableDemo, PlayerActorHakoniwa_isEnableDemo_bytes) &&
+              CheckBytes(PlayerActorHakoniwa_startDemoPuppetable,
+                         PlayerActorHakoniwa_startDemoPuppetable_bytes) &&
+              CheckBytes(PlayerActorHakoniwa_endDemoPuppetable,
+                         PlayerActorHakoniwa_endDemoPuppetable_bytes) &&
+              CheckBytes(TalkNpc_movement, TalkNpc_movement_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1797,6 +1900,12 @@ extern "C" void exl_main(void* x0, void* x1) {
     ClosetAttackSensorHook::InstallAtOffset(Closet_attackSensor);
     TalkBalloonWaitHook::InstallAtOffset(EventFlowNodeMessageBalloon_exeWait);
     TryLockTalkDemoHook::InstallAtOffset(rs_tryLockStartEventTalkDemo);
+    HackStartDemoHook::InstallAtOffset(PlayerHackKeeper_startHackStartDemo);
+    HackStartDemoPuppetableHook::InstallAtOffset(PlayerHackKeeper_startHackStartDemoPuppetable);
+    PlayerIsEnableDemoHook::InstallAtOffset(PlayerActorHakoniwa_isEnableDemo);
+    PlayerStartDemoPuppetableHook::InstallAtOffset(PlayerActorHakoniwa_startDemoPuppetable);
+    PlayerEndDemoPuppetableHook::InstallAtOffset(PlayerActorHakoniwa_endDemoPuppetable);
+    TalkNpcMovementHook::InstallAtOffset(TalkNpc_movement);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

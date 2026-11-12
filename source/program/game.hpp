@@ -280,7 +280,22 @@ constexpr ptrdiff_t EventFlowNodeMessageBalloon_exeWait = 0x1b79ec;
 constexpr u64 EventFlowNodeMessageBalloon_exeWait_bytes = 0xfd0013e8d10143ffULL;
 // rs::tryLockStartEventTalkDemo(al::EventFlowNode*) -> bool
 constexpr ptrdiff_t rs_tryLockStartEventTalkDemo = 0x55a118;
-constexpr u64 rs_tryLockStartEventTalkDemo_bytes = 0xa9017bfdf81e0ff3ULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 rs_tryLockStartEventTalkDemo_bytes = 0xa9017bfdf81e0ff3ULL;
+// Capture start demo (type 3). PlayerHackKeeper+0x0 = owning player actor.
+constexpr ptrdiff_t PlayerHackKeeper_startHackStartDemo = 0x449274;  // (keeper, actor) -> bool
+constexpr u64 PlayerHackKeeper_startHackStartDemo_bytes = 0xa9017bfda9be4ff4ULL;
+constexpr ptrdiff_t PlayerHackKeeper_startHackStartDemoPuppetable = 0x4492b8;
+constexpr u64 PlayerHackKeeper_startHackStartDemoPuppetable_bytes = 0xa9014ff4d100c3ffULL;
+// PlayerActorHakoniwa demo vfuncs (vptr+0x108 isEnableDemo, +0x120 start/+0x128 end puppetable)
+constexpr ptrdiff_t PlayerActorHakoniwa_isEnableDemo = 0x421754;
+constexpr u64 PlayerActorHakoniwa_isEnableDemo_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr ptrdiff_t PlayerActorHakoniwa_startDemoPuppetable = 0x421b84;
+constexpr u64 PlayerActorHakoniwa_startDemoPuppetable_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr ptrdiff_t PlayerActorHakoniwa_endDemoPuppetable = 0x421e2c;
+constexpr u64 PlayerActorHakoniwa_endDemoPuppetable_bytes = 0xf9000bf5d10103ffULL;
+// TalkNpc::movement()
+constexpr ptrdiff_t TalkNpc_movement = 0x3ddb38;
+constexpr u64 TalkNpc_movement_bytes = 0xa90157f6fc1c0fe8ULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;
