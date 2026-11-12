@@ -42,6 +42,7 @@ static bool gClosetStartP2Pending = false;  // P2 wore something: next stage sta
 static bool gClosetStartP2 = false;         // this stage: Luigi steps out of the booth
 static bool gClosetSwapDone = false;
 static bool gTalkP2 = false;
+static bool gShopP2 = false;     // the last conversation (e.g. the Crazy Cap counter) was Luigi's
 static bool gLeadP2 = false;     // Luigi grabbed a Moon: he is "player 0" until the Moon demo ends
 static s32 gLeadFrames = 0;
 static s32 gLeadNoDemo = 0;
@@ -84,6 +85,7 @@ static void ResetStageState() {
     gModeMismatchFrames = 0;
     gModeFrames = 0;
     gTalkP2 = false;
+    gShopP2 = false;
     gLeadP2 = false;
     gLeadFrames = gLeadNoDemo = 0;
     gTalkNoDemoFrames = 0;
@@ -458,6 +460,14 @@ static bool CalledFromClosetState(void* ret) {
     uintptr_t off = reinterpret_cast<uintptr_t>(ret) - exl::util::modules::GetTargetStart();
     return off >= kStateBegin && off < kStateEnd;
 }
+// Crazy Cap counter: ShopStateInShop (0x31703c..0x31ac30, Ghidra) wears a bought item through
+// exeBuyWait / prepareChangeWear / exeEndWear -> GameDataFunction::wearCostume/wearCap.
+constexpr uintptr_t kShopBegin = 0x317000;
+constexpr uintptr_t kShopEnd = 0x31ac40;
+static bool CalledFromShopState(void* ret) {
+    uintptr_t off = reinterpret_cast<uintptr_t>(ret) - exl::util::modules::GetTargetStart();
+    return off >= kShopBegin && off < kShopEnd;
+}
 
 // ---- Luigi preview models.
 // StageSceneStateCloset::initModel (0x4d5560, Ghidra) builds one preview model per entry of
@@ -690,6 +700,7 @@ HOOK_DEFINE_TRAMPOLINE(TalkBalloonWaitHook) {
 HOOK_DEFINE_TRAMPOLINE(TryLockTalkDemoHook) {
     static bool Callback(void* node) {
         bool r = Orig(node);
+        if (r) coop::gShopP2 = coop::gToucherIsP2 && coop::gP2 != nullptr;
         if (r && coop::gToucherIsP2 && coop::gP2 != nullptr) {
             coop::gTalkP2 = true;
             coop::gTalkNoDemoFrames = 0;
@@ -1123,6 +1134,13 @@ static void CopyName(char* dst, const char* src) {
 
 HOOK_DEFINE_TRAMPOLINE(WearCostumeHook) {
     static bool Callback(void* writer, const char* name) {
+        if (coop::gShopP2 && coop::gP2 != nullptr &&
+            coop::closet::CalledFromShopState(__builtin_return_address(0))) {
+            CopyName(coop::gP2Costume, name);
+            coop::gClosetStartP2Pending = true;
+            COOP_LOG("Shop: Luigi wears his new body %s (Mario keeps his)", coop::gP2Costume);
+            return true;
+        }
         if (coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0))) {
             CopyName(coop::gP2Costume, name);
             coop::gClosetStartP2Pending = true;
@@ -1135,6 +1153,13 @@ HOOK_DEFINE_TRAMPOLINE(WearCostumeHook) {
 
 HOOK_DEFINE_TRAMPOLINE(WearCapHook) {
     static bool Callback(void* writer, const char* name) {
+        if (coop::gShopP2 && coop::gP2 != nullptr &&
+            coop::closet::CalledFromShopState(__builtin_return_address(0))) {
+            CopyName(coop::gP2CapName, name);
+            coop::gClosetStartP2Pending = true;
+            COOP_LOG("Shop: Luigi wears his new cap %s (Mario keeps his)", coop::gP2CapName);
+            return true;
+        }
         if (coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0))) {
             CopyName(coop::gP2CapName, name);
             coop::gClosetStartP2Pending = true;
