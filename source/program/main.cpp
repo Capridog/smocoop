@@ -255,6 +255,9 @@ static void Reset();
 namespace coop::cut {
 static void Reset();
 }  // namespace coop::cut
+namespace coop::carry {
+static void Reset();
+}  // namespace coop::carry
 
 // ---------------------------------------------------------------------------- spawning (step 2)
 
@@ -1279,6 +1282,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneDtorHook) {
         coop::voice::Reset();
         coop::boss::Reset();
         coop::cut::Reset();
+        coop::carry::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
         COOP_LOG("StageScene destroyed: co-op state cleared");
@@ -1683,6 +1687,44 @@ static al::LiveActor* LeadSwap(const al::LiveActor* caller, s32 index) {
     return index == 0 ? coop::gP2 : coop::gP1;
 }
 
+
+// ------------------------------------------------------------------------ carrying (seeds, rocks)
+// Held objects (GrowPlantSeed nuts, GrowFlowerSeed, KickStone rocks, ...) use MapObjStatePlayerHold:
+// the carry starts from the carrier's sensor message (tryStartCarryFront/Up/FrontWallKeep keep the
+// sensor at state+0x20, Ghidra 0x2b6ec8), but while held the object follows "player 0"
+// (rs::calcPlayerHoldMtx, calcPlayerFrontDir, syncPlayerModelAlpha in exeHold 0x2b72fc; the throw
+// uses rs::getPlayerVelocity in GrowSeedUtil::throwFromPlayer). So a nut Luigi picks up would sit in
+// Mario's hands. Remember who started carrying each object and answer that brother for it.
+extern al::LiveActor* AlGetSensorHost(const void*) asm("_ZN2al13getSensorHostEPKNS_9HitSensorE");
+namespace coop::carry {
+struct Held { const al::LiveActor* obj; al::LiveActor* holder; };
+static Held gHeld[24];
+static s32 gNext = 0;
+static void Reset() { for (auto& h : gHeld) h = {nullptr, nullptr}; gNext = 0; }
+static void Note(void* state, const void* sensor) {
+    auto* obj = coop::Field<al::LiveActor*>(state, smo100::ActorStateBase_actor);
+    al::LiveActor* who = sensor ? AlGetSensorHost(sensor) : nullptr;
+    if (obj == nullptr || who == nullptr) return;
+    if (who != coop::gP1 && who != coop::gP2) return;
+    for (auto& h : gHeld) if (h.obj == obj) { h.holder = who; return; }
+    gHeld[gNext] = {obj, who}; gNext = (gNext + 1) % 24;
+}
+static al::LiveActor* HolderOf(const al::LiveActor* obj) {
+    for (auto& h : gHeld) if (h.obj == obj) return h.holder;
+    return nullptr;
+}
+}  // namespace coop::carry
+#define CARRY_HOOK(NAME)                                                         \
+    HOOK_DEFINE_TRAMPOLINE(NAME) {                                               \
+        static bool Callback(void* state, const void* msg, const void* sensor) { \
+            bool r = Orig(state, msg, sensor);                                   \
+            if (r) coop::carry::Note(state, sensor);                             \
+            return r;                                                            \
+        }                                                                        \
+    };
+CARRY_HOOK(CarryFrontHook)
+CARRY_HOOK(CarryFrontWallKeepHook)
+CARRY_HOOK(CarryUpHook)
 // ------------------------------------------------------------------------ bosses (3D World)
 // Bosses aim at "player 0" through rs::getPlayerPos / getPlayerBodyPos / getPlayerVelocity ->
 // al::getPlayerActor(boss, 0) (Ghidra: 0x56f608, 0x56f678, 0x56fa7c), so vanilla they only ever go
@@ -1738,6 +1780,7 @@ static al::LiveActor* RedirectOwnPlayer(const al::LiveActor* caller, s32 index) 
     if (auto* l = LeadSwap(caller, index)) return l;
     if (index != 0 || coop::gP2 == nullptr || caller == nullptr) return nullptr;
     if (auto* b = coop::boss::Target(caller)) return b == coop::gP1 ? nullptr : b;
+    if (auto* h = coop::carry::HolderOf(caller)) return h == coop::gP1 ? nullptr : h;
     if (coop::gToucherIsP2) return coop::gP2;
     if (coop::gNpcTarget == coop::gP2) return coop::gP2;
     if (caller == coop::gP2 || caller == coop::gP2Cap) return coop::gP2;
@@ -2991,7 +3034,10 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_SeRequest_playStart, al_SeRequest_playStart_bytes) &&
               CheckBytes(atk_Util_GetWaveFileOfWaveSound, atk_Util_GetWaveFileOfWaveSound_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemo, ProjectDemoDirector_requestStartDemo_bytes) &&
-              CheckBytes(ProjectDemoDirector_requestEndDemo, ProjectDemoDirector_requestEndDemo_bytes);
+              CheckBytes(ProjectDemoDirector_requestEndDemo, ProjectDemoDirector_requestEndDemo_bytes) &&
+              CheckBytes(MapObjStatePlayerHold_tryStartCarryFront, MapObjStatePlayerHold_tryStart_bytes) &&
+              CheckBytes(MapObjStatePlayerHold_tryStartCarryFrontWallKeep, MapObjStatePlayerHold_tryStart_bytes) &&
+              CheckBytes(MapObjStatePlayerHold_tryStartCarryUp, MapObjStatePlayerHold_tryStart_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -3076,6 +3122,9 @@ extern "C" void exl_main(void* x0, void* x1) {
     GetWaveFileOfWaveSoundHook::InstallAtOffset(atk_Util_GetWaveFileOfWaveSound);
     DemoStartHook::InstallAtOffset(ProjectDemoDirector_requestStartDemo);
     DemoEndHook::InstallAtOffset(ProjectDemoDirector_requestEndDemo);
+    CarryFrontHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryFront);
+    CarryFrontWallKeepHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryFrontWallKeep);
+    CarryUpHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryUp);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
