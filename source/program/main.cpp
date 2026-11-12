@@ -878,10 +878,34 @@ HOOK_DEFINE_TRAMPOLINE(NpcLookAtUpdateHook) {
                     const char* name = coop::Field<const char*>(cur, 0x0);
                     al::HitSensor* alt = name ? GameGetHitSensor(want, name) : nullptr;
                     if (alt != nullptr) coop::SetField(holder, 0x30, alt);
+                    static s32 sLog = 20;
+                    if (sLog > 0) {
+                        sLog--;
+                        COOP_LOG("Gaze: NPC %p now looks at %s (%s)", npc,
+                                 want == coop::gP2 ? "P2" : "P1", alt ? "ok" : "no sensor");
+                    }
                 }
             }
         }
         Orig(ctl);
+    }
+};
+
+// Event-flow NPCs (shopkeepers' ShoppingWatcher, Toads, Sphynx...): al::EventFlowExecutor::execute
+// (0x88b918; actor at +0x8) runs the NPC's event nodes and EventFlowMovement (turning/walking
+// toward "the player"). Same rule as TalkNpc::movement: the brother talking, else the nearer one.
+HOOK_DEFINE_TRAMPOLINE(EventFlowExecuteHook) {
+    static void Callback(u8* executor) {
+        al::LiveActor* npc = coop::Field<al::LiveActor*>(executor, 0x8);
+        if (coop::gP1 == nullptr || coop::gP2 == nullptr || npc == nullptr) return Orig(executor);
+        al::LiveActor* target;
+        if (coop::gTalkP2) target = coop::gP2;
+        else if (rs::isActiveDemo(coop::gP1)) target = coop::gP1;
+        else target = Dist2(coop::gP2, npc) < Dist2(coop::gP1, npc) ? coop::gP2 : coop::gP1;
+        al::LiveActor* prev = coop::gNpcTarget;
+        coop::gNpcTarget = target;
+        Orig(executor);
+        coop::gNpcTarget = prev;
     }
 };
 
@@ -2069,7 +2093,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(NpcEventDirector_updateBalloon, NpcEventDirector_updateBalloon_bytes) &&
               CheckBytes(rs_checkTriggerDecideWithRequestIcon,
                          rs_checkTriggerDecideWithRequestIcon_bytes) &&
-              CheckBytes(NpcJointLookAtController_update, NpcJointLookAtController_update_bytes);
+              CheckBytes(NpcJointLookAtController_update, NpcJointLookAtController_update_bytes) &&
+              CheckBytes(EventFlowExecutor_execute, EventFlowExecutor_execute_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -2131,6 +2156,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     UpdateBalloonHook::InstallAtOffset(NpcEventDirector_updateBalloon);
     DecideWithIconHook::InstallAtOffset(rs_checkTriggerDecideWithRequestIcon);
     NpcLookAtUpdateHook::InstallAtOffset(NpcJointLookAtController_update);
+    EventFlowExecuteHook::InstallAtOffset(EventFlowExecutor_execute);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

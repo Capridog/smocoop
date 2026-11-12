@@ -311,7 +311,9 @@ constexpr u64 NpcEventDirector_updateBalloon_bytes = 0x6d063befd10403ffULL;
 constexpr ptrdiff_t rs_checkTriggerDecideWithRequestIcon = 0x55b2fc;
 constexpr u64 rs_checkTriggerDecideWithRequestIcon_bytes = 0xa9074ff4d10243ffULL;
 constexpr ptrdiff_t NpcJointLookAtController_update = 0x3a65c4;
-constexpr u64 NpcJointLookAtController_update_bytes = 0xfd0013e8d10143ffULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 NpcJointLookAtController_update_bytes = 0xfd0013e8d10143ffULL;
+constexpr ptrdiff_t EventFlowExecutor_execute = 0x88b918;  // al::EventFlowExecutor::execute()
+constexpr u64 EventFlowExecutor_execute_bytes = 0xa9014ff4f81d0ff5ULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;
