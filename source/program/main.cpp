@@ -2211,6 +2211,78 @@ HOOK_DEFINE_TRAMPOLINE(CounterLifeCtrlCtorHook) {
 
 // --------------------------------------------------------------------- per-frame (placement)
 
+// ------------------------------------------------------------------------ brother collision
+// 3D World style: the brothers are solid to each other (you stop against your brother, the one
+// standing still isn't shoved), and landing on his head bounces you up. Applied once per frame
+// after the scene update. Skipped while either is in a bubble, capturing, bound to a pipe/door/
+// booth, dead, or a demo is running.
+extern void GameSetTrans(al::LiveActor*, const sead::Vector3f&) asm(
+    "_ZN2al8setTransEPNS_9LiveActorERKN4sead7Vector3IfEE");
+extern sead::Vector3f* GameGetVelocityPtr(al::LiveActor*) asm(
+    "_ZN2al14getVelocityPtrEPNS_9LiveActorE");
+namespace coop::collide {
+constexpr float kRadius = 90.0f;       // centre-to-centre horizontal distance kept
+constexpr float kHeight = 150.0f;      // vertical gap at/above which they don't block
+constexpr float kHeadMin = 110.0f;     // feet this far above the other's feet = on his head
+constexpr float kHeadMax = 190.0f;
+constexpr float kHeadRadius = 70.0f;
+constexpr float kBounce = 26.0f;       // upward speed of a head bounce
+static s32 gBounceCooldown[2] = {0, 0};
+
+static bool Free(s32 i) {
+    al::LiveActor* p = PlayerAt(i);
+    if (p == nullptr || al::isDead(p) || gBubbleBusy[i] > 0) return false;
+    void* keeper = Field<void*>(p, smo100::PlayerActorHakoniwa_hackKeeper);
+    if (keeper && Field<al::LiveActor*>(keeper, smo100::PlayerHackKeeper_hackActor)) return false;
+    void* pup = Field<void*>(p, smo100::PlayerActorHakoniwa_puppet);
+    if (pup && Field<void*>(pup, 0x70) && Field<void*>(pup, 0x78)) return false;  // bound
+    return true;
+}
+
+static void Update() {
+    for (s32 i = 0; i < 2; i++) if (gBounceCooldown[i] > 0) gBounceCooldown[i]--;
+    if (gP1 == nullptr || gP2 == nullptr || gGameOver || gLeadP2 || gTalkP2) return;
+    if (rs::isActiveDemo(gP1) || rs::isActiveDemo(gP2)) return;
+    if (!Free(0) || !Free(1)) return;
+    sead::Vector3f a = al::getTrans(gP1), b = al::getTrans(gP2);
+    float dx = b.x - a.x, dz = b.z - a.z, dy = b.y - a.y;
+    float h2 = dx * dx + dz * dz;
+
+    // Head bounce: the higher brother, falling, lands on the other's head.
+    for (s32 top = 0; top < 2; top++) {
+        al::LiveActor* hi = PlayerAt(top);
+        float rise = top == 0 ? -dy : dy;  // hi.y - lo.y
+        if (gBounceCooldown[top] > 0 || rise < kHeadMin || rise > kHeadMax) continue;
+        if (h2 > kHeadRadius * kHeadRadius) continue;
+        sead::Vector3f* v = GameGetVelocityPtr(hi);
+        if (v == nullptr || v->y > 0.0f) continue;
+        v->y = kBounce;
+        gBounceCooldown[top] = 20;
+        return;
+    }
+
+    if (dy > kHeight || dy < -kHeight || h2 >= kRadius * kRadius) return;
+    float d = __builtin_sqrtf(h2);
+    float nx, nz;
+    if (d < 0.01f) { nx = 1.0f; nz = 0.0f; d = 0.0f; }
+    else { nx = dx / d; nz = dz / d; }
+    float push = kRadius - d;
+    // Whoever is moving toward the other is the one stopped.
+    const sead::Vector3f& va = al::getVelocity(gP1);
+    const sead::Vector3f& vb = al::getVelocity(gP2);
+    float inA = va.x * nx + va.z * nz;        // P1 moving toward P2
+    float inB = -(vb.x * nx + vb.z * nz);     // P2 moving toward P1
+    if (inA < 0.0f) inA = 0.0f;
+    if (inB < 0.0f) inB = 0.0f;
+    float wa = 0.5f, wb = 0.5f;
+    if (inA + inB > 0.5f) { wa = inA / (inA + inB); wb = 1.0f - wa; }
+    sead::Vector3f na = {a.x - nx * push * wa, a.y, a.z - nz * push * wa};
+    sead::Vector3f nb = {b.x + nx * push * wb, b.y, b.z + nz * push * wb};
+    if (wa > 0.0f) GameSetTrans(gP1, na);
+    if (wb > 0.0f) GameSetTrans(gP2, nb);
+}
+}  // namespace coop::collide
+
 HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
     static void Callback(StageScene* scene) {
         Orig(scene);
@@ -2219,6 +2291,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
         coop::CheckModeSwitch(scene);
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return;
 
+        coop::collide::Update();
         if (coop::gLeadP2) {
             bool demo = rs::isActiveDemo(coop::gP1) || rs::isActiveDemo(coop::gP2);
             ++coop::gLeadFrames;

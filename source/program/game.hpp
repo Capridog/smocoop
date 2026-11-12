@@ -33,6 +33,7 @@ const sead::Vector3f& getTrans(const LiveActor* actor);           // 0x8ee66c
 void calcSideDir(sead::Vector3f* out, const LiveActor* actor);    // 0x8ee6ec
 void resetPosition(LiveActor* actor, const sead::Vector3f& trans);// 0x8e28b8
 void setVelocityZero(LiveActor* actor);                           // 0x8e2c68
+const sead::Vector3f& getVelocity(const LiveActor* actor);        // 0x8e2a34
 bool isDead(const LiveActor* actor);                              // 0x8d9980
 bool isInDeathArea(const LiveActor* actor);                       // 0x8d6bb8
 class IUseAreaObj;
