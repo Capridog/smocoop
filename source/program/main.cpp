@@ -1108,6 +1108,20 @@ HOOK_DEFINE_TRAMPOLINE(HolderGetPlayerHook) {
     }
 };
 
+// Crazy Cap "wear it now": after the reload ShoppingWatcherStateWear::appear (0x316a88, Ghidra)
+// calls rs::requestBindPlayer(shopkeeper, sensor) -> binds player 0, and exeAction plays the
+// pose on that puppet. When Luigi bought and wore the item, bind Luigi instead.
+HOOK_DEFINE_TRAMPOLINE(ShopWearAppearHook) {
+    static void Callback(void* state) {
+        if (!coop::gClosetStartP2 || coop::gP2 == nullptr) return Orig(state);
+        bool prevT = coop::gToucherIsP2;
+        coop::gToucherIsP2 = true;
+        Orig(state);
+        coop::gToucherIsP2 = prevT;
+        COOP_LOG("Shop: Luigi shows off his new outfit");
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -2456,7 +2470,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(Shine_receiveMsg, Shine_receiveMsg_bytes) &&
               CheckBytes(StageSceneStateGetShine_kill, StageSceneStateGetShine_kill_bytes) &&
               CheckBytes(PlayerHolder_tryGetPlayer, PlayerHolder_tryGetPlayer_bytes) &&
-              CheckBytes(PlayerHolder_getPlayer, PlayerHolder_getPlayer_bytes);
+              CheckBytes(PlayerHolder_getPlayer, PlayerHolder_getPlayer_bytes) &&
+              CheckBytes(ShoppingWatcherStateWear_appear, ShoppingWatcherStateWear_appear_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -2529,6 +2544,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     GetShineKillHook::InstallAtOffset(StageSceneStateGetShine_kill);
     HolderTryGetPlayerHook::InstallAtOffset(PlayerHolder_tryGetPlayer);
     HolderGetPlayerHook::InstallAtOffset(PlayerHolder_getPlayer);
+    ShopWearAppearHook::InstallAtOffset(ShoppingWatcherStateWear_appear);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

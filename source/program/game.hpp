@@ -335,7 +335,9 @@ constexpr u64 StageSceneStateGetShine_kill_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t PlayerHolder_tryGetPlayer = 0x9a3df4;  // al::PlayerHolder::tryGetPlayer(int)
 constexpr u64 PlayerHolder_tryGetPlayer_bytes = 0x6b01011ff9400408ULL;
 constexpr ptrdiff_t PlayerHolder_getPlayer = 0x9a3de4;     // al::PlayerHolder::getPlayer(int)
-constexpr u64 PlayerHolder_getPlayer_bytes = 0x937c7c29f9400008ULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 PlayerHolder_getPlayer_bytes = 0x937c7c29f9400008ULL;
+constexpr ptrdiff_t ShoppingWatcherStateWear_appear = 0x316a88;
+constexpr u64 ShoppingWatcherStateWear_appear_bytes = 0xa9017bfda9be4ff4ULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;
