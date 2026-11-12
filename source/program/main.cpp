@@ -1335,7 +1335,7 @@ extern const sead::Vector3f* SeEmitterGetPosition(const void*) asm("_ZNK2al9SeEm
 namespace coop::voice {
 constexpr u32 kPvWsdSize = 19720;
 constexpr u32 kPvCount = 126;
-alignas(0x1000) static u8 gWar[6 << 20];
+alignas(0x1000) static u8 gWar[10 << 20];  // room for long sleep and cheer lines
 static bool gTried = false, gLoaded = false;
 alignas(0x10) static u8 gPool[0x40];  // nn::audio::MemoryPoolType
 static void* gKeepers[48];

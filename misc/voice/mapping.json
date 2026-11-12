@@ -98,26 +98,14 @@
 "95": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D1.wav",
 "96": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D2.wav",
 "97": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000797.wav",
-"98": "galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [62] - SE_PV_RELEAVED.wav",
-"99": "galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [65] - SE_PV_YAWN.wav",
-"100": [
-"SNORE",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [61] - SE_PV_LIE_WAIT.wav"
-],
-"101": [
-"SNORE",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [63] - SE_PV_SLEEP_1.wav"
-],
-"102": "lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/522.wav",
-"103": [
-"SNORE",
-"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [64] - SE_PV_SLEEP_2.wav"
-],
-"104": [
-"SNORE",
-"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/485.wav"
-],
-"105": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A6C.wav",
+"98": "/tmp/claude-0/pv/sleepfinal/098.wav",
+"99": "/tmp/claude-0/pv/sleepfinal/099.wav",
+"100": "/tmp/claude-0/pv/sleepfinal/100.wav",
+"101": "/tmp/claude-0/pv/sleepfinal/101.wav",
+"102": "/tmp/claude-0/pv/sleepfinal/102.wav",
+"103": "/tmp/claude-0/pv/sleepfinal/103.wav",
+"104": "/tmp/claude-0/pv/sleepfinal/104.wav",
+"105": "/tmp/claude-0/pv/sleepfinal/105.wav",
 "106": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_000006FF.wav",
 "107": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000794.wav",
 "108": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007D9.wav",
