@@ -366,6 +366,9 @@ constexpr u64 MapObjStatePlayerHold_tryStart_bytes = 0xa9017bfda9be4ff4ULL;
 constexpr ptrdiff_t al_getPlayerPos_actor = 0x9a3f9c;  // al::getPlayerPos(const LiveActor*, int)
 constexpr u64 al_getPlayerPos_actor_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr u64 JumpingRopeNpc_vtable = 0x1d5c288;     // vtable for JumpingRopeNpc + 0x10
+constexpr u64 RaceManGoal_vtable = 0x1d636f0;
+constexpr u64 RaceManRace_vtable = 0x1d63b48;
+constexpr u64 SnowManRaceNpc_vtable = 0x1d6ab08;
 constexpr ptrdiff_t atk_Util_GetWaveFileOfWaveSound = 0xac02c0;
 constexpr u64 atk_Util_GetWaveFileOfWaveSound_bytes = 0xf90033f5d10243ffULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)

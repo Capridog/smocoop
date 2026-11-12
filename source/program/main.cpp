@@ -253,6 +253,7 @@ static void Load();
 }  // namespace coop::voice
 namespace coop::boss {
 static void Reset();
+static bool RaceWinnerIsP2();
 }  // namespace coop::boss
 namespace coop::cut {
 static void Reset();
@@ -833,7 +834,8 @@ HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
         bool r = Orig(dir, name, type);
         if (!r || capture || type < 3 || type == 9 || coop::gTalkP2 || coop::gClosetP2) return r;
         if (coop::gP1 == nullptr || coop::gP2 == nullptr || coop::cut::gHidden != nullptr) return r;
-        al::LiveActor* other = coop::gLeadP2 ? coop::gP1 : coop::gP2;
+        bool p2Leads = coop::gLeadP2 || coop::boss::RaceWinnerIsP2();
+        al::LiveActor* other = p2Leads ? coop::gP1 : coop::gP2;
         s32 slot = other == coop::gP1 ? 0 : 1;
         if (al::isDead(other) || coop::gBubbleBusy[slot] > 60) return r;
         RsHideDemoPlayer(other);
@@ -1736,8 +1738,19 @@ CARRY_HOOK(CarryUpHook)
 namespace coop::boss {
 struct Slot { const al::LiveActor* boss; al::LiveActor* target; s32 since; };
 static Slot gSlots[96];
+static al::LiveActor* gRaceWinner = nullptr;  // brother who reached a Koopa race goal first
 static s32 gFrame = 0;
-static void Reset() { for (auto& s : gSlots) s = {nullptr, nullptr, 0}; gFrame = 0; }
+static void Reset() { for (auto& s : gSlots) s = {nullptr, nullptr, 0}; gFrame = 0; gRaceWinner = nullptr; }
+static bool Usable(s32 i) {
+    al::LiveActor* p = coop::PlayerAt(i);
+    return p != nullptr && !al::isDead(p) && coop::gBubbleBusy[i] <= 60;
+}
+static float Dist2(const al::LiveActor* a, const al::LiveActor* b) {
+    const sead::Vector3f& p = al::getTrans(a);
+    const sead::Vector3f& q = al::getTrans(b);
+    float dx = p.x - q.x, dy = p.y - q.y, dz = p.z - q.z;
+    return dx * dx + dy * dy + dz * dz;
+}
 template <size_t N>
 static bool InTable(const u64 (&t)[N], u64 vt) {
     s32 lo = 0, hi = N - 1;
@@ -1753,23 +1766,42 @@ static s32 Kind(const al::LiveActor* a) {
     if (InTable(kBossVtables, vt) || InTable(kEnemyVtables, vt)) return 1;
     if (InTable(kAwareVtables, vt)) return 2;
     if (vt == smo100::JumpingRopeNpc_vtable) return 3;
+    if (vt == smo100::RaceManGoal_vtable || vt == smo100::RaceManRace_vtable) return 4;
+    if (vt == smo100::SnowManRaceNpc_vtable) return 5;
     return 0;
 }
+extern bool RsIsPlayerHackYukimaru(const al::LiveActor*) asm("_ZN2rs20isPlayerHackYukimaruEPKN2al9LiveActorE");
+// Koopa Freerunning: RaceManGoal keeps the actors that reached it (count +0x108, array +0x110,
+// Ghidra 0x3b7198) and RaceManRace::calcRank measures rs::getPlayerPos(goal) (0x3b83bc); the race
+// holds its goal at +0x150. Answer the brother who reached the goal first, else the one nearer it.
+static al::LiveActor* RaceBrother(const al::LiveActor* caller) {
+    u64 vt = *reinterpret_cast<const u64*>(caller) - exl::util::modules::GetTargetStart();
+    const al::LiveActor* goal = vt == smo100::RaceManGoal_vtable ? caller
+                                : coop::Field<const al::LiveActor*>(caller, 0x150);
+    if (goal == nullptr) return nullptr;
+    s32 n = coop::Field<s32>(goal, 0x108);
+    auto** arr = coop::Field<al::LiveActor**>(goal, 0x110);
+    gRaceWinner = nullptr;
+    for (s32 i = 0; arr != nullptr && i < n && i < 16; i++)
+        if (arr[i] == coop::gP1 || arr[i] == coop::gP2) { gRaceWinner = arr[i]; return arr[i]; }
+    bool ok0 = Usable(0), ok1 = Usable(1);
+    if (!ok0 || !ok1) return ok1 ? coop::gP2 : (ok0 ? coop::gP1 : nullptr);
+    return Dist2(goal, coop::gP1) <= Dist2(goal, coop::gP2) ? coop::gP1 : coop::gP2;
+}
+static bool RaceWinnerIsP2() { return gRaceWinner != nullptr && gRaceWinner == coop::gP2; }
 extern bool JumpingRopeIsNerveJump(const void*) asm("_ZNK14JumpingRopeNpc11isNerveJumpEv");
 extern bool JumpingRopeIsNerveMiss(const void*) asm("_ZNK14JumpingRopeNpc11isNerveMissEv");
-static bool Usable(s32 i) {
-    al::LiveActor* p = coop::PlayerAt(i);
-    return p != nullptr && !al::isDead(p) && coop::gBubbleBusy[i] <= 60;
-}
-static float Dist2(const al::LiveActor* a, const al::LiveActor* b) {
-    const sead::Vector3f& p = al::getTrans(a); const sead::Vector3f& q = al::getTrans(b);
-    float x = p.x - q.x, y = p.y - q.y, z = p.z - q.z; return x * x + y * y + z * z;
-}
 static al::LiveActor* Target(const al::LiveActor* boss) {
     if (coop::gP1 == nullptr || coop::gP2 == nullptr || coop::gGameOver) return nullptr;
-    if (rs::isActiveDemo(coop::gP1) || rs::isActiveDemo(coop::gP2)) return nullptr;
     s32 kind = Kind(boss);
     if (kind == 0) return nullptr;
+    // Races answer during their finish cutscenes too (the winner is put on the goal).
+    if (kind == 4) return RaceBrother(boss);
+    if (kind == 5) {  // Shiverian race: the brother riding a Shiverian racer
+        if (!RsIsPlayerHackYukimaru(coop::gP1) && RsIsPlayerHackYukimaru(coop::gP2)) return coop::gP2;
+        return coop::gP1;
+    }
+    if (rs::isActiveDemo(coop::gP1) || rs::isActiveDemo(coop::gP2)) return nullptr;
     Slot* s = nullptr;
     for (auto& e : gSlots) if (e.boss == boss) { s = &e; break; }
     if (s == nullptr) {
