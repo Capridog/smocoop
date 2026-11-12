@@ -295,7 +295,10 @@ constexpr ptrdiff_t PlayerActorHakoniwa_endDemoPuppetable = 0x421e2c;
 constexpr u64 PlayerActorHakoniwa_endDemoPuppetable_bytes = 0xf9000bf5d10103ffULL;
 // TalkNpc::movement()
 constexpr ptrdiff_t TalkNpc_movement = 0x3ddb38;
-constexpr u64 TalkNpc_movement_bytes = 0xa90157f6fc1c0fe8ULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 TalkNpc_movement_bytes = 0xa90157f6fc1c0fe8ULL;
+// al::PartsModel::initPartsFixFileNoRegister(parent, info, archive, ?, suffix)
+constexpr ptrdiff_t PartsModel_initPartsFixFileNoRegister = 0x96cd78;
+constexpr u64 PartsModel_initPartsFixFileNoRegister_bytes = 0xfd005be8d103c3ffULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;

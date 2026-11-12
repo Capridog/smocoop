@@ -747,6 +747,25 @@ HOOK_DEFINE_TRAMPOLINE(TalkNpcMovementHook) {
     }
 };
 
+// ------------------------------------------------------------------------ Luigi's hands
+// Hands are al::PartsModel sub-actors set up by al::PartsModel::initPartsFixFileNoRegister
+// (0x96cd78; args: parent, info, archive, ?, suffix "HandL"/"HandR"). From the body's
+// InitPartsFixInfoHand* byml it stores UseFollowMtxScale at +0x140 and UseLocalScale at +0x141;
+// PartsModel::updatePose (0x96cfd0) copies the wrist joint's scale onto the hand when +0x140 is
+// set. On Tall Luigi that scale balloons the fist in the jump animation. Luigi's hands keep
+// their own size (scale 1) instead.
+HOOK_DEFINE_TRAMPOLINE(PartsFixInitHook) {
+    static void Callback(u8* self, al::LiveActor* parent, const al::ActorInitInfo& info,
+                         const char* archive, const char* arg4, const char* suffix) {
+        Orig(self, parent, info, archive, arg4, suffix);
+        if (!(coop::gSpawningP2 || coop::gLuigiCloset) || suffix == nullptr) return;
+        if (std::strcmp(suffix, "HandL") == 0 || std::strcmp(suffix, "HandR") == 0) {
+            self[0x140] = 0;  // UseFollowMtxScale
+            self[0x141] = 0;  // UseLocalScale
+        }
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -1849,7 +1868,9 @@ extern "C" void exl_main(void* x0, void* x1) {
                          PlayerActorHakoniwa_startDemoPuppetable_bytes) &&
               CheckBytes(PlayerActorHakoniwa_endDemoPuppetable,
                          PlayerActorHakoniwa_endDemoPuppetable_bytes) &&
-              CheckBytes(TalkNpc_movement, TalkNpc_movement_bytes);
+              CheckBytes(TalkNpc_movement, TalkNpc_movement_bytes) &&
+              CheckBytes(PartsModel_initPartsFixFileNoRegister,
+                         PartsModel_initPartsFixFileNoRegister_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1906,6 +1927,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     PlayerStartDemoPuppetableHook::InstallAtOffset(PlayerActorHakoniwa_startDemoPuppetable);
     PlayerEndDemoPuppetableHook::InstallAtOffset(PlayerActorHakoniwa_endDemoPuppetable);
     TalkNpcMovementHook::InstallAtOffset(TalkNpc_movement);
+    PartsFixInitHook::InstallAtOffset(PartsModel_initPartsFixFileNoRegister);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
