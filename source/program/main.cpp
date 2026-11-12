@@ -1752,8 +1752,11 @@ static s32 Kind(const al::LiveActor* a) {
     u64 vt = *reinterpret_cast<const u64*>(a) - exl::util::modules::GetTargetStart();
     if (InTable(kBossVtables, vt) || InTable(kEnemyVtables, vt)) return 1;
     if (InTable(kAwareVtables, vt)) return 2;
+    if (vt == smo100::JumpingRopeNpc_vtable) return 3;
     return 0;
 }
+extern bool JumpingRopeIsNerveJump(const void*) asm("_ZNK14JumpingRopeNpc11isNerveJumpEv");
+extern bool JumpingRopeIsNerveMiss(const void*) asm("_ZNK14JumpingRopeNpc11isNerveMissEv");
 static bool Usable(s32 i) {
     al::LiveActor* p = coop::PlayerAt(i);
     return p != nullptr && !al::isDead(p) && coop::gBubbleBusy[i] <= 60;
@@ -1779,11 +1782,14 @@ static al::LiveActor* Target(const al::LiveActor* boss) {
     float d0 = ok0 ? Dist2(boss, coop::gP1) : 3.4e38f, d1 = ok1 ? Dist2(boss, coop::gP2) : 3.4e38f;
     al::LiveActor* nearer = d0 <= d1 ? coop::gP1 : coop::gP2;
     s32 cur = s->target == coop::gP1 ? 0 : (s->target == coop::gP2 ? 1 : -1);
+    // Jump rope: whoever is nearer when the rope starts is the jumper for the whole round.
+    if (kind == 3 && cur >= 0 && (JumpingRopeIsNerveJump(boss) || JumpingRopeIsNerveMiss(boss)))
+        return s->target;
     if (cur < 0 || !(cur == 0 ? ok0 : ok1)) { s->target = nearer; s->since = gFrame; }
-    else if (s->target != nearer && gFrame - s->since > (kind == 1 ? 180 : 20)) {
+    else if (s->target != nearer && gFrame - s->since > (kind == 1 ? 180 : (kind == 3 ? 0 : 20))) {
         float dc = cur == 0 ? d0 : d1, dn = cur == 0 ? d1 : d0;
         // bosses/enemies: other ~35% closer; creatures: ~15% closer
-        if (dn < dc * (kind == 1 ? 0.42f : 0.72f)) { s->target = nearer; s->since = gFrame; }
+        if (dn < dc * (kind == 1 ? 0.42f : (kind == 3 ? 1.0f : 0.72f))) { s->target = nearer; s->since = gFrame; }
     }
     return s->target;
 }
@@ -1813,6 +1819,16 @@ HOOK_DEFINE_TRAMPOLINE(GetPlayerActorHook) {
     }
 };
 
+
+// al::getPlayerPos(const LiveActor*, int) (0x9a3f9c) reads the PlayerHolder directly instead of
+// going through al::getPlayerActor(actor, i), so our per-caller answer never reached it (Magmatic
+// / Ruined Dragon / Golem / Broode aim, jump rope). Give it the same answer.
+HOOK_DEFINE_TRAMPOLINE(AlGetPlayerPosHook) {
+    static const sead::Vector3f* Callback(const al::LiveActor* caller, s32 index) {
+        if (auto* p = RedirectOwnPlayer(caller, index)) return &al::getTrans(p);
+        return Orig(caller, index);
+    }
+};
 HOOK_DEFINE_TRAMPOLINE(TryGetPlayerActorHook) {
     static al::LiveActor* Callback(const al::LiveActor* caller, s32 index) {
         if (auto* p = RedirectOwnPlayer(caller, index)) return p;
@@ -3055,7 +3071,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(ProjectDemoDirector_requestEndDemo, ProjectDemoDirector_requestEndDemo_bytes) &&
               CheckBytes(MapObjStatePlayerHold_tryStartCarryFront, MapObjStatePlayerHold_tryStart_bytes) &&
               CheckBytes(MapObjStatePlayerHold_tryStartCarryFrontWallKeep, MapObjStatePlayerHold_tryStart_bytes) &&
-              CheckBytes(MapObjStatePlayerHold_tryStartCarryUp, MapObjStatePlayerHold_tryStart_bytes);
+              CheckBytes(MapObjStatePlayerHold_tryStartCarryUp, MapObjStatePlayerHold_tryStart_bytes) &&
+              CheckBytes(al_getPlayerPos_actor, al_getPlayerPos_actor_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -3143,6 +3160,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     CarryFrontHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryFront);
     CarryFrontWallKeepHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryFrontWallKeep);
     CarryUpHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryUp);
+    AlGetPlayerPosHook::InstallAtOffset(al_getPlayerPos_actor);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
