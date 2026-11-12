@@ -34,7 +34,7 @@ rows=[]
 for s in sorted(mapping):
     nm=names[str(s)]; g=groups.get(nm,'')
     v=mapping[s]
-    if isinstance(v,list): cur='edited clip' if v[0]=='CUT' else 'Galaxy snores, looped'
+    if isinstance(v,list): cur={'CUT':'edited clip','SEQ':'several clips in a row'}.get(v[0],'looped hums or snores')
     else:
         b=os.path.basename(v); cur=('Galaxy '+b.split(' - ')[-1][:-4]) if ' - ' in b else '3DW '+b.split('_')[-1][:-4].lstrip('0')
     cid=None

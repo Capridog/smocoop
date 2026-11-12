@@ -25,7 +25,31 @@
 "27": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007BA.wav",
 "43": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007CD.wav",
 "44": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C1.wav",
-"45": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000A74.wav",
+"45": [
+"SEQ",
+[
+[
+0.05,
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/413.wav"
+],
+[
+0.98,
+"luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007C8.wav"
+],
+[
+2.58,
+"lm/Luigi/LuiSec1_0.aw (W_Instruments+Voices) (American)/527.wav"
+],
+[
+4.52,
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [2] - SE_PV_JUMP_JOY_03.wav"
+],
+[
+6.6,
+"galaxy/Luigi/(In-Game)/Wave_37_B70kawa_2.aw [1] - SE_PV_JUMP_JOY_02.wav"
+]
+]
+],
 "46": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_000007CC.wav",
 "47": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000705.wav",
 "48": "luigi_zip/Luigi SM3DW/SeResourceStd2nd_00000742.wav",

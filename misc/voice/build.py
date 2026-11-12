@@ -28,7 +28,16 @@ def cut(v):
     if v[4]: a=librosa.effects.pitch_shift(a/32768.0,sr=r,n_steps=v[4])*32768.0
     fade=int(r*0.02); a=a.copy(); a[:fade]*=np.linspace(0,1,fade); a[-fade:]*=np.linspace(1,0,fade)
     return r,a.astype(np.float32)
+def seq(v):
+    # ['SEQ', [[start_s, clip], ...]]: several clips placed at Mario's timings (one combined line)
+    parts=[(t,)+rd(c) for t,c in v[1]]; r=max(p[1] for p in parts)
+    out=np.zeros(int(r*(max(t+len(a)/cr for t,cr,a in parts)+0.1)),np.float32)
+    for t,cr,a in parts:
+        if cr!=r: a=np.interp(np.arange(0,len(a),cr/r),np.arange(len(a)),a)
+        a=a/ (np.sqrt(np.mean(a**2))+1e-9)*4000.0; st=int(t*r); out[st:st+len(a)]+=a[:len(out)-st]
+    return r,out
 def src(v,slot):
+    if isinstance(v,list) and v[0]=='SEQ': return seq(v)
     if isinstance(v,list) and v[0]=='CUT': return cut(v)
     if isinstance(v,list):  # ['SNORE', clip1, clip2]: alternate with gaps up to Mario's length
         _,m=rd(mario[slot]); target=len(m)/48000.0
