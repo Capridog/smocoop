@@ -2239,10 +2239,39 @@ static bool Free(s32 i) {
     return true;
 }
 
+constexpr float kCapHop = 22.0f;       // upward speed when the brother's Cappy hits you
+constexpr float kCapTouch = 95.0f;     // Cappy centre to body centre
+constexpr float kCapAway = 140.0f;     // Cappy this far from its owner's head = thrown
+static bool gCapHit[2] = {false, false};  // this throw already hopped the other brother
+
+// A brother's thrown Cappy that touches the other brother makes him hop (once per throw).
+static void CapHop() {
+    for (s32 thrower = 0; thrower < 2; thrower++) {
+        al::LiveActor* owner = PlayerAt(thrower);
+        al::LiveActor* target = PlayerAt(1 - thrower);
+        al::LiveActor* cap = Field<al::LiveActor*>(owner, smo100::PlayerActorHakoniwa_hackCap);
+        if (cap == nullptr || al::isDead(cap)) { gCapHit[thrower] = false; continue; }
+        const sead::Vector3f& c = al::getTrans(cap);
+        const sead::Vector3f& o = al::getTrans(owner);
+        float ox = c.x - o.x, oy = c.y - (o.y + 150.0f), oz = c.z - o.z;
+        if (ox * ox + oy * oy + oz * oz < kCapAway * kCapAway) { gCapHit[thrower] = false; continue; }
+        if (gCapHit[thrower] || !Free(1 - thrower)) continue;
+        const sead::Vector3f& t = al::getTrans(target);
+        float tx = c.x - t.x, ty = c.y - (t.y + 80.0f), tz = c.z - t.z;
+        if (tx * tx + ty * ty + tz * tz > kCapTouch * kCapTouch) continue;
+        sead::Vector3f* v = GameGetVelocityPtr(target);
+        if (v == nullptr) continue;
+        if (v->y < kCapHop) v->y = kCapHop;
+        gCapHit[thrower] = true;
+        gBounceCooldown[1 - thrower] = 20;
+    }
+}
+
 static void Update() {
     for (s32 i = 0; i < 2; i++) if (gBounceCooldown[i] > 0) gBounceCooldown[i]--;
     if (gP1 == nullptr || gP2 == nullptr || gGameOver || gLeadP2 || gTalkP2) return;
     if (rs::isActiveDemo(gP1) || rs::isActiveDemo(gP2)) return;
+    CapHop();
     if (!Free(0) || !Free(1)) return;
     sead::Vector3f a = al::getTrans(gP1), b = al::getTrans(gP2);
     float dx = b.x - a.x, dz = b.z - a.z, dy = b.y - a.y;
