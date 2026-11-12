@@ -252,6 +252,9 @@ static void Load();
 namespace coop::boss {
 static void Reset();
 }  // namespace coop::boss
+namespace coop::cut {
+static void Reset();
+}  // namespace coop::cut
 
 // ---------------------------------------------------------------------------- spawning (step 2)
 
@@ -805,6 +808,48 @@ HOOK_DEFINE_TRAMPOLINE(TryLockTalkDemoHook) {
     }
 };
 
+
+// ------------------------------------------------------------------------ cutscenes (3D World)
+// ProjectDemoDirector::requestStartDemo(name, type) (Ghidra 0xd5978): types 3-8 and 10 put every
+// player into a demo state (vptr+0x120/0x130/0x140/0x178/0x150/0x160) and the cutscene then moves
+// only player 0 (boss intros, Moon get, kingdom scenes). The other brother would stand frozen in
+// the shot. Hide him for the cutscene (rs::hideDemoPlayer resolves player 0 from the actor, which
+// our redirect answers with that brother) and bring him back beside the lead when it ends.
+// Captures (HackStart), Luigi's conversations and the wardrobe keep their own handling.
+extern void RsHideDemoPlayer(const al::LiveActor*) asm("_ZN2rs14hideDemoPlayerEPKN2al9LiveActorE");
+extern void RsShowDemoPlayer(const al::LiveActor*) asm("_ZN2rs14showDemoPlayerEPKN2al9LiveActorE");
+namespace coop::cut {
+static al::LiveActor* gHidden = nullptr;
+static void Reset() { gHidden = nullptr; }
+}  // namespace coop::cut
+HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
+    static bool Callback(void* dir, const char* name, s32 type) {
+        bool capture = coop::gHackDemoStarter != nullptr;
+        bool r = Orig(dir, name, type);
+        if (!r || capture || type < 3 || type == 9 || coop::gTalkP2 || coop::gClosetP2) return r;
+        if (coop::gP1 == nullptr || coop::gP2 == nullptr || coop::cut::gHidden != nullptr) return r;
+        al::LiveActor* other = coop::gLeadP2 ? coop::gP1 : coop::gP2;
+        s32 slot = other == coop::gP1 ? 0 : 1;
+        if (al::isDead(other) || coop::gBubbleBusy[slot] > 60) return r;
+        RsHideDemoPlayer(other);
+        coop::cut::gHidden = other;
+        COOP_LOG("Cutscene %s (type %d): P%d hidden", name ? name : "?", type, slot + 1);
+        return r;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(DemoEndHook) {
+    static u64 Callback(void* dir, const char* name, s32 type) {
+        u64 ret = Orig(dir, name, type);
+        al::LiveActor* h = coop::cut::gHidden;
+        if (h == nullptr) return ret;
+        coop::cut::gHidden = nullptr;
+        if (h != coop::gP1 && h != coop::gP2) return ret;
+        RsShowDemoPlayer(h);
+        al::LiveActor* lead = h == coop::gP1 ? coop::gP2 : coop::gP1;
+        if (lead != nullptr && !al::isDead(lead)) coop::PlaceBeside(h, lead, "after cutscene");
+        return ret;
+    }
+};
 // ------------------------------------------------------------------------ captures for both
 // Ghidra: a capture starts a HackStart demo: PlayerHackKeeper::startHackStartDemo(Puppetable)
 // (0x449274/0x4492b8) -> rs::requestStartDemoHackStart -> ProjectDemoDirector::requestStartDemo
@@ -1233,6 +1278,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneDtorHook) {
         coop::text::Reset();
         coop::voice::Reset();
         coop::boss::Reset();
+        coop::cut::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
         COOP_LOG("StageScene destroyed: co-op state cleared");
@@ -2943,7 +2989,9 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_SeKeeper_requestPlaySeIdLocal, al_SeKeeper_requestPlaySeIdLocal_bytes) &&
               CheckBytes(al_SeRequest_setNew, al_SeRequest_setNew_bytes) &&
               CheckBytes(al_SeRequest_playStart, al_SeRequest_playStart_bytes) &&
-              CheckBytes(atk_Util_GetWaveFileOfWaveSound, atk_Util_GetWaveFileOfWaveSound_bytes);
+              CheckBytes(atk_Util_GetWaveFileOfWaveSound, atk_Util_GetWaveFileOfWaveSound_bytes) &&
+              CheckBytes(ProjectDemoDirector_requestStartDemo, ProjectDemoDirector_requestStartDemo_bytes) &&
+              CheckBytes(ProjectDemoDirector_requestEndDemo, ProjectDemoDirector_requestEndDemo_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -3026,6 +3074,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     SeRequestSetNewHook::InstallAtOffset(al_SeRequest_setNew);
     SeRequestPlayStartHook::InstallAtOffset(al_SeRequest_playStart);
     GetWaveFileOfWaveSoundHook::InstallAtOffset(atk_Util_GetWaveFileOfWaveSound);
+    DemoStartHook::InstallAtOffset(ProjectDemoDirector_requestStartDemo);
+    DemoEndHook::InstallAtOffset(ProjectDemoDirector_requestEndDemo);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 

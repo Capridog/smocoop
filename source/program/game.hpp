@@ -355,6 +355,10 @@ constexpr ptrdiff_t al_SeRequest_setNew = 0xa98a80;
 constexpr u64 al_SeRequest_setNew_bytes = 0xa90157f6f81c0ff7ULL;
 constexpr ptrdiff_t al_SeRequest_playStart = 0xa98314;
 constexpr u64 al_SeRequest_playStart_bytes = 0xa9017bfda9be4ff4ULL;
+constexpr ptrdiff_t ProjectDemoDirector_requestStartDemo = 0xd5978;  // (const char*, DemoType) -> bool
+constexpr u64 ProjectDemoDirector_requestStartDemo_bytes = 0xa90157f6a9bc5ff8ULL;
+constexpr ptrdiff_t ProjectDemoDirector_requestEndDemo = 0xd5d5c;    // (const char*, DemoType)
+constexpr u64 ProjectDemoDirector_requestEndDemo_bytes = 0xa90157f6f81c0ff7ULL;
 constexpr ptrdiff_t atk_Util_GetWaveFileOfWaveSound = 0xac02c0;
 constexpr u64 atk_Util_GetWaveFileOfWaveSound_bytes = 0xf90033f5d10243ffULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
