@@ -1321,12 +1321,15 @@ HOOK_DEFINE_TRAMPOLINE(SystemMessageHolderLabelHook) {
 extern bool AlIsExistFile(const coop::luigi::SafeStr&) asm("_ZN2al11isExistFileERKN4sead14SafeStringBaseIcEE");
 extern bool AlTryLoadFileToBuffer(const coop::luigi::SafeStr&, u8*, u32, s32) asm(
     "_ZN2al19tryLoadFileToBufferERKN4sead14SafeStringBaseIcEEPhji");
+extern void AtkAttachMemoryPool(void*, void*, u64) asm(
+    "_ZN2nn3atk11SoundSystem16AttachMemoryPoolEPNS_5audio14MemoryPoolTypeEPvm");
 extern const sead::Vector3f* SeEmitterGetPosition(const void*) asm("_ZNK2al9SeEmitter11getPositionEv");
 namespace coop::voice {
 constexpr u32 kPvWsdSize = 19720;
 constexpr u32 kPvCount = 126;
 alignas(0x1000) static u8 gWar[6 << 20];
 static bool gTried = false, gLoaded = false;
+alignas(0x10) static u8 gPool[0x40];  // nn::audio::MemoryPoolType
 static void* gKeepers[48];
 static s32 gKeeperN = 0;
 static void* gReqs[96];  // SeRequests currently filled from a Luigi keeper
@@ -1343,6 +1346,9 @@ static void Load() {
     u32 magic;
     std::memcpy(&magic, gWar, 4);
     if (gLoaded && magic != 0x52415746) gLoaded = false;  // "FWAR"
+    // nn::audio only plays wave data that sits in an attached memory pool; the game's own sound
+    // heap is one, our buffer is not. Attach it once (it lives for the whole session).
+    if (gLoaded) AtkAttachMemoryPool(gPool, gWar, sizeof(gWar));
     COOP_LOG("voice: Luigi archive %s", gLoaded ? "loaded" : "failed");
 }
 static void Reset() { gKeeperN = 0; gReqN = 0; gInLuigiRequest = false; gInLuigiPlay = false; }
@@ -1439,7 +1445,7 @@ HOOK_DEFINE_TRAMPOLINE(GetWaveFileOfWaveSoundHook) {
     static const void* Callback(const void* wsd, u32 index, const void* archive, const void* loader) {
         if (coop::voice::gInLuigiPlay) {
             const void* w = coop::voice::LuigiWave(wsd, index);
-            if (coop::voice::gLogBudget > 0) {
+            if (w != nullptr && coop::voice::gLogBudget > 0) {
                 coop::voice::gLogBudget--;
                 COOP_LOG("voice: Luigi wave idx %u -> %s", index, w ? "swapped" : "kept");
             }
