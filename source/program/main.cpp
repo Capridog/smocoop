@@ -1,5 +1,6 @@
 #include "lib.hpp"
 #include "program/game.hpp"
+#include "program/boss_vtables.hpp"
 #include "program/loggers.hpp"
 
 #include <cstring>
@@ -248,6 +249,9 @@ namespace coop::voice {
 static void Reset();
 static void Load();
 }  // namespace coop::voice
+namespace coop::boss {
+static void Reset();
+}  // namespace coop::boss
 
 // ---------------------------------------------------------------------------- spawning (step 2)
 
@@ -1228,6 +1232,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneDtorHook) {
         coop::dim::Reset();
         coop::text::Reset();
         coop::voice::Reset();
+        coop::boss::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
         COOP_LOG("StageScene destroyed: co-op state cleared");
@@ -1632,9 +1637,61 @@ static al::LiveActor* LeadSwap(const al::LiveActor* caller, s32 index) {
     return index == 0 ? coop::gP2 : coop::gP1;
 }
 
+// ------------------------------------------------------------------------ bosses (3D World)
+// Bosses aim at "player 0" through rs::getPlayerPos / getPlayerBodyPos / getPlayerVelocity ->
+// al::getPlayerActor(boss, 0) (Ghidra: 0x56f608, 0x56f678, 0x56fa7c), so vanilla they only ever go
+// after Mario. In 3D World a boss goes after the nearer brother: each boss actor keeps a target,
+// switching when the other brother is clearly closer (and at least 3 s after the last switch), or
+// at once when its target is down or in a bubble. Cutscenes keep the vanilla answer.
+namespace coop::boss {
+struct Slot { const al::LiveActor* boss; al::LiveActor* target; s32 since; };
+static Slot gSlots[32];
+static s32 gFrame = 0;
+static void Reset() { for (auto& s : gSlots) s = {nullptr, nullptr, 0}; gFrame = 0; }
+static bool IsBoss(const al::LiveActor* a) {
+    u64 vt = *reinterpret_cast<const u64*>(a) - exl::util::modules::GetTargetStart();
+    s32 lo = 0, hi = sizeof(kBossVtables) / sizeof(kBossVtables[0]) - 1;
+    while (lo <= hi) { s32 m = (lo + hi) / 2; if (kBossVtables[m] == vt) return true;
+        if (kBossVtables[m] < vt) lo = m + 1; else hi = m - 1; }
+    return false;
+}
+static bool Usable(s32 i) {
+    al::LiveActor* p = coop::PlayerAt(i);
+    return p != nullptr && !al::isDead(p) && coop::gBubbleBusy[i] <= 60;
+}
+static float Dist2(const al::LiveActor* a, const al::LiveActor* b) {
+    const sead::Vector3f& p = al::getTrans(a); const sead::Vector3f& q = al::getTrans(b);
+    float x = p.x - q.x, y = p.y - q.y, z = p.z - q.z; return x * x + y * y + z * z;
+}
+static al::LiveActor* Target(const al::LiveActor* boss) {
+    if (coop::gP1 == nullptr || coop::gP2 == nullptr || coop::gGameOver) return nullptr;
+    if (rs::isActiveDemo(coop::gP1) || rs::isActiveDemo(coop::gP2)) return nullptr;
+    if (!IsBoss(boss)) return nullptr;
+    Slot* s = nullptr;
+    for (auto& e : gSlots) if (e.boss == boss) { s = &e; break; }
+    if (s == nullptr) {
+        for (auto& e : gSlots) if (e.boss == nullptr) { s = &e; break; }
+        if (s == nullptr) s = &gSlots[gFrame & 31];
+        *s = {boss, nullptr, gFrame};
+    }
+    bool ok0 = Usable(0), ok1 = Usable(1);
+    if (!ok0 && !ok1) return nullptr;
+    float d0 = ok0 ? Dist2(boss, coop::gP1) : 3.4e38f, d1 = ok1 ? Dist2(boss, coop::gP2) : 3.4e38f;
+    al::LiveActor* nearer = d0 <= d1 ? coop::gP1 : coop::gP2;
+    s32 cur = s->target == coop::gP1 ? 0 : (s->target == coop::gP2 ? 1 : -1);
+    if (cur < 0 || !(cur == 0 ? ok0 : ok1)) { s->target = nearer; s->since = gFrame; }
+    else if (s->target != nearer && gFrame - s->since > 180) {
+        float dc = cur == 0 ? d0 : d1, dn = cur == 0 ? d1 : d0;
+        if (dn < dc * 0.42f) { s->target = nearer; s->since = gFrame; }  // other is ~35% closer
+    }
+    return s->target;
+}
+}  // namespace coop::boss
+
 static al::LiveActor* RedirectOwnPlayer(const al::LiveActor* caller, s32 index) {
     if (auto* l = LeadSwap(caller, index)) return l;
     if (index != 0 || coop::gP2 == nullptr || caller == nullptr) return nullptr;
+    if (auto* b = coop::boss::Target(caller)) return b == coop::gP1 ? nullptr : b;
     if (coop::gToucherIsP2) return coop::gP2;
     if (coop::gNpcTarget == coop::gP2) return coop::gP2;
     if (caller == coop::gP2 || caller == coop::gP2Cap) return coop::gP2;
@@ -2629,6 +2686,7 @@ static void CapHop() {
 }
 
 static void Update() {
+    coop::boss::gFrame++;
     for (s32 i = 0; i < 2; i++) if (gBounceCooldown[i] > 0) gBounceCooldown[i]--;
     if (gP1 == nullptr || gP2 == nullptr || gGameOver || gLeadP2 || gTalkP2) return;
     if (!gP2Placed) return;  // no pushing apart while Luigi is still being placed at stage start
