@@ -1,0 +1,103 @@
+<title>Luigi Voice Picker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one column of voice lines; each row = Mario's line, Luigi's line, ranked suggestion chips, full list */
+:root{
+  --bg:#f3f6f1; --panel:#ffffff; --fg:#17231a; --muted:#5b6b5e; --line:#d5ded5;
+  --green:#1f8a3b; --green-ink:#ffffff; --red:#c8322b; --chip:#e6efe5; --warn:#a46a00;
+  --display:'Bricolage Grotesque',system-ui,sans-serif; --body:'Atkinson Hyperlegible',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0f1611;--panel:#162019;--fg:#e4eee5;--muted:#93a596;--line:#2a372d;--green:#3fbf62;--green-ink:#08140b;--red:#ef6a5f;--chip:#1e2b21;--warn:#e0a640;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f1611;--panel:#162019;--fg:#e4eee5;--muted:#93a596;--line:#2a372d;--green:#3fbf62;--green-ink:#08140b;--red:#ef6a5f;--chip:#1e2b21;--warn:#e0a640;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 var(--body)}
+.wrap{max-width:900px;margin:0 auto;padding-block:28px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+h1{font:800 clamp(28px,5vw,42px)/1.05 var(--display);margin:0;text-wrap:balance}
+h1 span{color:var(--green)}
+.lede{color:var(--muted);max-width:66ch;margin:0}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.bar label{font-weight:700}
+#q{font:15px var(--body);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;flex:1 1 220px;min-width:0}
+.status{font:13px var(--mono);color:var(--muted)}
+.list{display:grid;gap:10px}
+.row{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px}
+.row.changed{border-color:var(--green)}
+.head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.name{font:600 18px/1.2 var(--display)}
+.note{font:12px/1.3 var(--mono);color:var(--muted)}
+.ctl,.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-width:0}
+.chips .lbl{font-size:13px;color:var(--muted);margin-right:2px}
+button{font:600 14px var(--body);border-radius:999px;border:1px solid var(--line);background:var(--chip);color:var(--fg);padding:6px 12px;cursor:pointer}
+button:focus-visible,select:focus-visible,#q:focus-visible{outline:3px solid var(--green);outline-offset:2px}
+button.m{border-color:var(--red);color:var(--red);background:transparent}
+button.n{border-color:var(--green);color:var(--green);background:transparent}
+button.sel{background:var(--green);border-color:var(--green);color:var(--green-ink)}
+button .u{font-weight:400;font-size:12px;color:var(--warn)}
+button.sel .u{color:inherit}
+select{font:14px var(--body);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;max-width:100%;min-width:0;flex:1 1 220px}
+.chosen{font-size:14px}
+.chosen b{color:var(--green)}
+</style>
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <h1>Luigi's <span>voice</span> lines</h1>
+    <p class="lede">Press <b>Mario</b> to hear the original and <b>Luigi now</b> for his current clip. Below each line are the 8 closest clips I found, 3D World first. Tap one to hear it and choose it, tap it again to undo. Picks save on their own; tell me in the chat when you're done.</p>
+  </header>
+  <div class="bar"><label for="q">Find a line</label><input id="q" type="search" placeholder="jump, sleep, hurt…"><span class="status" id="st">Loading saved picks…</span></div>
+  <div class="list" id="list"></div>
+</div>
+<script>
+const D=/*DATA*/;
+const audio=new Audio();
+function play(src){try{audio.pause();audio.src=src;audio.currentTime=0;audio.play().catch(()=>{});}catch(e){}}
+let picks={};           // slot -> clip id
+let db=null, ref=null, writing=Promise.resolve();
+const list=document.getElementById('list'), st=document.getElementById('st');
+const groups={};for(const [id,c] of Object.entries(D.clips)){(groups[c.group]=groups[c.group]||[]).push([id,c]);}
+const short=id=>D.clips[id]?D.clips[id].label.replace(/ \((\d|\.)+s\)$/,''):id;
+function usage(){const u={};for(const r of D.rows){const id=picks[r.slot]||r.curId;if(id)(u[id]=u[id]||[]).push(r);}return u;}
+const views=[];
+for(const r of D.rows){
+  const el=document.createElement('div');el.className='row';el.dataset.k=(r.label+' '+r.name).toLowerCase();
+  el.innerHTML=`<div class="head"><div><div class="name">${r.label}</div><div class="note">${r.name}</div></div><div class="chosen"></div></div><div class="ctl"></div><div class="chips"><span class="lbl">Closest:</span></div>`;
+  const ctl=el.querySelector('.ctl'), chips=el.querySelector('.chips'), chosen=el.querySelector('.chosen');
+  const bm=document.createElement('button');bm.className='m';bm.textContent='Mario';bm.onclick=()=>play(r.mario);
+  const bn=document.createElement('button');bn.className='n';bn.textContent='Luigi now';bn.onclick=()=>play(r.now);
+  const sel=document.createElement('select');sel.id='pick-'+r.slot;sel.setAttribute('aria-label','All clips for '+r.label);
+  const o0=document.createElement('option');o0.value='';o0.textContent='All clips…';sel.appendChild(o0);
+  const fill=()=>{if(sel.dataset.f)return;sel.dataset.f='1';for(const [g,items] of Object.entries(groups)){const og=document.createElement('optgroup');og.label=g;for(const [id,c] of items){const o=document.createElement('option');o.value=id;o.textContent=c.label;og.appendChild(o);}sel.appendChild(og);}};
+  sel.addEventListener('pointerdown',fill);sel.addEventListener('focus',fill);sel.addEventListener('keydown',fill);
+  sel.onchange=()=>{if(sel.value){choose(r.slot,sel.value);play(D.clips[sel.value].src);}};
+  ctl.append(bm,bn,sel);
+  const chipEls=[];
+  for(const id of r.sug){const b=document.createElement('button');b.dataset.id=id;
+    b.onclick=()=>{play(D.clips[id].src); choose(r.slot, picks[r.slot]===id?null:id);};chips.appendChild(b);chipEls.push(b);}
+  views.push({r,el,chipEls,chosen,sel});list.appendChild(el);
+}
+function render(){
+  const u=usage();
+  for(const v of views){const p=picks[v.r.slot];
+    v.el.classList.toggle('changed',!!p);
+    v.chosen.innerHTML=p?`Picked: <b>${short(p)}</b>`:`Now: ${v.r.cur}`;
+    for(const b of v.chipEls){const id=b.dataset.id;const others=(u[id]||[]).filter(x=>x.slot!==v.r.slot);
+      b.className=p===id?'sel':'';b.innerHTML=short(id)+(others.length?` <span class="u">used: ${others[0].label}</span>`:'');}
+  }
+  const n=Object.keys(picks).length;st.textContent=db?`${n} pick${n===1?'':'s'} saved`:(n?`${n} picks (not saved: this view can't save)`:st.textContent);
+}
+function choose(slot,id){if(id)picks[slot]=id;else delete picks[slot];render();save();}
+let pending=false;
+function save(){if(!ref)return;if(pending)return;pending=true;
+  writing=writing.then(()=>new Promise(res=>setTimeout(res,400))).then(()=>{pending=false;const data={picks:Object.fromEntries(Object.entries(picks).map(([k,v])=>[String(k),v]))};
+    return ref.set(data).then(()=>{st.textContent=`${Object.keys(picks).length} picks saved`;}).catch(e=>{st.textContent='Could not save: '+(e&&e.code||'error');});});}
+document.getElementById('q').addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();for(const v of views)v.el.hidden=!!q&&!v.el.dataset.k.includes(q);});
+render();
+(async()=>{
+  const t=setTimeout(()=>{if(!db)st.textContent='Saving is unavailable here; picks stay on this screen.';},10000);
+  try{db=await (window.claude&&window.claude.use?window.claude.use('db'):null);}catch(e){db=null;}
+  clearTimeout(t);
+  if(!db){st.textContent='Saving is unavailable here; picks stay on this screen.';return;}
+  ref=db.doc('voice/picks');
+  try{const s=await ref.get();if(s.exists){const d=s.data()||{};picks=Object.assign({},d.picks||{},picks);}}catch(e){}
+  render();
+})();
+</script>
