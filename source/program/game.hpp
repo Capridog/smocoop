@@ -326,7 +326,15 @@ constexpr ptrdiff_t rs_isTriggerUiCancel = 0x575c40;     // (const al::IUseScene
 constexpr u64 rs_isTriggerUiCancel_bytes = 0xa9017bfdf81e0ff3ULL;
 // NpcEventCtrlInfo::requestShowBalloonMessage(const NpcEventBalloonInfo&)
 constexpr ptrdiff_t NpcEventCtrlInfo_requestShowBalloonMessage = 0x3a2f10;
-constexpr u64 NpcEventCtrlInfo_requestShowBalloonMessage_bytes = 0x6d0233edd10243ffULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 NpcEventCtrlInfo_requestShowBalloonMessage_bytes = 0x6d0233edd10243ffULL;
+constexpr ptrdiff_t Shine_receiveMsg = 0x1cfb68;
+constexpr u64 Shine_receiveMsg_bytes = 0x6d0423e9d10243ffULL;
+constexpr ptrdiff_t StageSceneStateGetShine_kill = 0x4dbc5c;
+constexpr u64 StageSceneStateGetShine_kill_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr ptrdiff_t PlayerHolder_tryGetPlayer = 0x9a3df4;  // al::PlayerHolder::tryGetPlayer(int)
+constexpr u64 PlayerHolder_tryGetPlayer_bytes = 0x6b01011ff9400408ULL;
+constexpr ptrdiff_t PlayerHolder_getPlayer = 0x9a3de4;     // al::PlayerHolder::getPlayer(int)
+constexpr u64 PlayerHolder_getPlayer_bytes = 0x937c7c29f9400008ULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;

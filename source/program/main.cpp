@@ -42,6 +42,9 @@ static bool gClosetStartP2Pending = false;  // P2 wore something: next stage sta
 static bool gClosetStartP2 = false;         // this stage: Luigi steps out of the booth
 static bool gClosetSwapDone = false;
 static bool gTalkP2 = false;
+static bool gLeadP2 = false;     // Luigi grabbed a Moon: he is "player 0" until the Moon demo ends
+static s32 gLeadFrames = 0;
+static s32 gLeadNoDemo = 0;
 static al::LiveActor* gNpcTarget = nullptr;   // TalkNpc::movement: who "player 0" is for this NPC
 static al::LiveActor* gHackDemoStarter = nullptr;  // player starting a capture (HackStart demo)
 static bool gSkippedHackDemo[2] = {false, false};  // P1/P2 skipped the other's HackStart demo       // P2 started the current NPC talk (UI follows P2's controller)
@@ -81,6 +84,8 @@ static void ResetStageState() {
     gModeMismatchFrames = 0;
     gModeFrames = 0;
     gTalkP2 = false;
+    gLeadP2 = false;
+    gLeadFrames = gLeadNoDemo = 0;
     gTalkNoDemoFrames = 0;
     gNpcTarget = nullptr;
     gHackDemoStarter = nullptr;
@@ -1029,6 +1034,69 @@ HOOK_DEFINE_TRAMPOLINE(BalloonRequestHook) {
     }
 };
 
+// ------------------------------------------------------------------------ Moons for Luigi
+// Ghidra: the Moon-get demo is played by "player 0" everywhere: StageSceneStateGetShine and
+// CameraPoserGetMoon (+0x178) use rs::getDemoPlayerTrans/Quat, rs::startActionDemoPlayer and
+// rs::replaceDemoPlayer, all al::getPlayerActor(actor, 0) -> the player's own model and animator;
+// rs::getPlayerActor(scene) and ProjectDemoDirector use al::getPlayerActor(PlayerHolder, i) ->
+// PlayerHolder::tryGetPlayer (0x9a3df4) / getPlayer (0x9a3de4). When Luigi collects the Moon
+// (Shine::receiveMsg 0x1cfb68 gets ShineGet/ShineGet2D from his side), swap players 0 and 1
+// until the Moon demo ends (StageSceneStateGetShine::kill 0x4dbc5c, or no demo for 1 s), so
+// Luigi does the dance and the camera frames him while Mario waits in the demo.
+extern bool GameIsMsgShineGet(const al::SensorMsg*) asm("_ZN2rs13isMsgShineGetEPKN2al9SensorMsgE");
+extern bool GameIsMsgShineGet2D(const al::SensorMsg*) asm("_ZN2rs15isMsgShineGet2DEPKN2al9SensorMsgE");
+
+static bool IsP2Side(const al::LiveActor* a) {
+    return a != nullptr && coop::gP2 != nullptr &&
+           (a == coop::gP2 || a == coop::gP2Cap || a == coop::P2HackActor());
+}
+
+HOOK_DEFINE_TRAMPOLINE(ShineReceiveMsgHook) {
+    static bool Callback(al::LiveActor* self, const al::SensorMsg* msg, al::HitSensor* other,
+                         al::HitSensor* own) {
+        bool get = coop::gP2 != nullptr && (GameIsMsgShineGet(msg) || GameIsMsgShineGet2D(msg));
+        if (!get) return Orig(self, msg, other, own);
+        al::LiveActor* host = other ? al::getSensorHost(other) : nullptr;
+        bool p2 = IsP2Side(host);
+        bool prevLead = coop::gLeadP2;
+        if (p2) coop::gLeadP2 = true;
+        bool r = Orig(self, msg, other, own);
+        if (p2) {
+            if (r) {
+                coop::gLeadFrames = 0;
+                coop::gLeadNoDemo = 0;
+                if (!prevLead) COOP_LOG("Moon: Luigi got it - he leads the Moon demo");
+            } else {
+                coop::gLeadP2 = prevLead;
+            }
+        } else if (r) {
+            coop::gLeadP2 = false;  // Mario got it
+        }
+        return r;
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(GetShineKillHook) {
+    static void Callback(void* state) {
+        Orig(state);
+        if (coop::gLeadP2) COOP_LOG("Moon: demo over, Mario is player 0 again");
+        coop::gLeadP2 = false;
+    }
+};
+
+HOOK_DEFINE_TRAMPOLINE(HolderTryGetPlayerHook) {
+    static al::LiveActor* Callback(const void* holder, s32 index) {
+        if (coop::gLeadP2 && (index == 0 || index == 1) && coop::gP1 && coop::gP2) index = 1 - index;
+        return Orig(holder, index);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(HolderGetPlayerHook) {
+    static al::LiveActor* Callback(const void* holder, s32 index) {
+        if (coop::gLeadP2 && (index == 0 || index == 1) && coop::gP1 && coop::gP2) index = 1 - index;
+        return Orig(holder, index);
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -1163,7 +1231,23 @@ HOOK_DEFINE_TRAMPOLINE(RegisterPlayerHook) {
 // rs::getPlayerHeadPos(cap) -> al::getPlayerActor(cap, 0)). When P2, P2's Cappy, or the enemy P2
 // is capturing asks, the answer must be P2. Everyone else still gets the vanilla answer.
 
+// Moon lead: while Luigi's Moon demo runs, players 0 and 1 swap for everyone except Mario's own
+// pieces (Mario, his Cappy, what he is capturing still see Mario as player 0).
+static al::LiveActor* LeadSwap(const al::LiveActor* caller, s32 index) {
+    if (!coop::gLeadP2 || coop::gP1 == nullptr || coop::gP2 == nullptr) return nullptr;
+    if (index != 0 && index != 1) return nullptr;
+    if (caller != nullptr && index == 0) {
+        al::LiveActor* p1Cap = coop::Field<al::LiveActor*>(coop::gP1, smo100::PlayerActorHakoniwa_hackCap);
+        void* keeper = coop::Field<void*>(coop::gP1, smo100::PlayerActorHakoniwa_hackKeeper);
+        al::LiveActor* p1Hack = keeper ? coop::Field<al::LiveActor*>(keeper, smo100::PlayerHackKeeper_hackActor) : nullptr;
+        if (caller == coop::gP1 || caller == p1Cap || (p1Hack != nullptr && caller == p1Hack))
+            return coop::gP1;
+    }
+    return index == 0 ? coop::gP2 : coop::gP1;
+}
+
 static al::LiveActor* RedirectOwnPlayer(const al::LiveActor* caller, s32 index) {
+    if (auto* l = LeadSwap(caller, index)) return l;
     if (index != 0 || coop::gP2 == nullptr || caller == nullptr) return nullptr;
     if (coop::gToucherIsP2) return coop::gP2;
     if (coop::gNpcTarget == coop::gP2) return coop::gP2;
@@ -2110,6 +2194,15 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
         coop::CheckModeSwitch(scene);
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return;
 
+        if (coop::gLeadP2) {
+            bool demo = rs::isActiveDemo(coop::gP1) || rs::isActiveDemo(coop::gP2);
+            ++coop::gLeadFrames;
+            if (demo) coop::gLeadNoDemo = 0;
+            else if (coop::gLeadFrames > 120 && ++coop::gLeadNoDemo > 60) {
+                coop::gLeadP2 = false;
+                COOP_LOG("Moon: no demo running, Mario is player 0 again");
+            }
+        }
         if (coop::gTalkP2) {
             if (rs::isActiveDemo(coop::gP1)) {
                 coop::gTalkNoDemoFrames = 0;
@@ -2232,7 +2325,11 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(rs_isTriggerUiDecideGdh, rs_isTriggerUiDecideGdh_bytes) &&
               CheckBytes(rs_isTriggerUiCancel, rs_isTriggerUiCancel_bytes) &&
               CheckBytes(NpcEventCtrlInfo_requestShowBalloonMessage,
-                         NpcEventCtrlInfo_requestShowBalloonMessage_bytes);
+                         NpcEventCtrlInfo_requestShowBalloonMessage_bytes) &&
+              CheckBytes(Shine_receiveMsg, Shine_receiveMsg_bytes) &&
+              CheckBytes(StageSceneStateGetShine_kill, StageSceneStateGetShine_kill_bytes) &&
+              CheckBytes(PlayerHolder_tryGetPlayer, PlayerHolder_tryGetPlayer_bytes) &&
+              CheckBytes(PlayerHolder_getPlayer, PlayerHolder_getPlayer_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -2301,6 +2398,10 @@ extern "C" void exl_main(void* x0, void* x1) {
     UiDecideGdhHook::InstallAtOffset(rs_isTriggerUiDecideGdh);
     UiCancelHook::InstallAtOffset(rs_isTriggerUiCancel);
     BalloonRequestHook::InstallAtOffset(NpcEventCtrlInfo_requestShowBalloonMessage);
+    ShineReceiveMsgHook::InstallAtOffset(Shine_receiveMsg);
+    GetShineKillHook::InstallAtOffset(StageSceneStateGetShine_kill);
+    HolderTryGetPlayerHook::InstallAtOffset(PlayerHolder_tryGetPlayer);
+    HolderGetPlayerHook::InstallAtOffset(PlayerHolder_getPlayer);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
