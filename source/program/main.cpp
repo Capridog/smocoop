@@ -909,6 +909,29 @@ HOOK_DEFINE_TRAMPOLINE(EventFlowExecuteHook) {
     }
 };
 
+// NPC "look position": NpcEventDirector::execute (0x3a3b68) writes player 0's head position into
+// the shared NpcEventCtrlInfo look slot every frame; rs::getNpcLookPos(npc) (0x55ad2c) hands it to
+// NpcJointLookAtController::update and rs::tryUpdateNpcEyeLineAnim, which prefer it over the eye
+// sensor. That is why shopkeepers' eyes stayed on Mario. Answer per NPC: Luigi's head when he is
+// the one talking or the nearer brother.
+extern bool GameCalcHeadJointPos(sead::Vector3f*, const al::LiveActor*) asm(
+    "_ZN2rs30tryCalcPlayerModelHeadJointPosEPN4sead7Vector3IfEEPKN2al9LiveActorE");
+extern const sead::Vector3f& GameGetPlayerHeadPos(const al::LiveActor*) asm(
+    "_ZN2rs16getPlayerHeadPosEPKN2al9LiveActorE");
+static sead::Vector3f gP2LookPos[4];
+static u32 gP2LookIdx = 0;
+HOOK_DEFINE_TRAMPOLINE(NpcLookPosHook) {
+    static const sead::Vector3f* Callback(const al::LiveActor* npc) {
+        const sead::Vector3f* r = Orig(npc);
+        if (coop::gP1 == nullptr || coop::gP2 == nullptr || npc == nullptr) return r;
+        bool p2 = coop::gTalkP2 || (!rs::isActiveDemo(coop::gP1) && P2Nearer(npc));
+        if (!p2) return r;
+        sead::Vector3f& out = gP2LookPos[gP2LookIdx++ & 3];
+        if (!GameCalcHeadJointPos(&out, coop::gP2)) out = GameGetPlayerHeadPos(coop::gP2);
+        return &out;
+    }
+};
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -2094,7 +2117,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(rs_checkTriggerDecideWithRequestIcon,
                          rs_checkTriggerDecideWithRequestIcon_bytes) &&
               CheckBytes(NpcJointLookAtController_update, NpcJointLookAtController_update_bytes) &&
-              CheckBytes(EventFlowExecutor_execute, EventFlowExecutor_execute_bytes);
+              CheckBytes(EventFlowExecutor_execute, EventFlowExecutor_execute_bytes) &&
+              CheckBytes(rs_getNpcLookPos, rs_getNpcLookPos_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -2157,6 +2181,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     DecideWithIconHook::InstallAtOffset(rs_checkTriggerDecideWithRequestIcon);
     NpcLookAtUpdateHook::InstallAtOffset(NpcJointLookAtController_update);
     EventFlowExecuteHook::InstallAtOffset(EventFlowExecutor_execute);
+    NpcLookPosHook::InstallAtOffset(rs_getNpcLookPos);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
