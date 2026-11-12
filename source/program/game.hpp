@@ -80,11 +80,14 @@ namespace rs {
 bool isPlayerOnGround(const al::LiveActor* actor);
 bool isInChangeStageArea(const al::LiveActor* actor, const sead::Vector3f* pos);  // 0x544de0
 bool isActiveDemo(const al::LiveActor* actor);  // 0x5508d4
+bool isSeparatePlay(const void* sceneObjHolder) asm(
+    "_ZN2rs14isSeparatePlayEPKN2al18IUseSceneObjHolderE");  // 0x575af4
 }  // namespace rs
 
 namespace GameDataFunction {
 void recoveryPlayerMax(const al::LiveActor* actor);  // 0x528780: shared life counter to max
 // 0x527c50: find the ChangeStageArea at the actor (or pos) and request that stage change.
+void reenterStage(GameDataHolderWriter writer);  // 0x527de8: holder+0x4a = 1
 void findAreaAndChangeNextStage(GameDataHolderWriter writer, const al::LiveActor* actor,
                                 const sead::Vector3f* pos);
 }
@@ -298,7 +301,10 @@ constexpr ptrdiff_t TalkNpc_movement = 0x3ddb38;
 constexpr u64 TalkNpc_movement_bytes = 0xa90157f6fc1c0fe8ULL;
 // al::PartsModel::initPartsFixFileNoRegister(parent, info, archive, ?, suffix)
 constexpr ptrdiff_t PartsModel_initPartsFixFileNoRegister = 0x96cd78;
-constexpr u64 PartsModel_initPartsFixFileNoRegister_bytes = 0xfd005be8d103c3ffULL;  // bool, set in Closet::init (isPlayerStartCloset)
+constexpr u64 PartsModel_initPartsFixFileNoRegister_bytes = 0xfd005be8d103c3ffULL;
+// rs::isSeparatePlay(const al::IUseSceneObjHolder*) -> SMO's 2P mode flag
+constexpr ptrdiff_t rs_isSeparatePlay = 0x575af4;
+constexpr u64 rs_isSeparatePlay_bytes = 0x910003fda9bf7bfdULL;  // bool, set in Closet::init (isPlayerStartCloset)
 // al::getMainControllerPort() -> s32 (used by rs::isTriggerUiDecide/Cancel and the UI)
 constexpr ptrdiff_t al_getMainControllerPort = 0x85bfb0;
 constexpr u64 al_getMainControllerPort_bytes = 0xa9017bfdf81e0ff3ULL;

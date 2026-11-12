@@ -55,6 +55,16 @@ static void SetField(void* base, ptrdiff_t off, T v) {
     std::memcpy(reinterpret_cast<u8*>(base) + off, &v, sizeof(T));
 }
 
+// SMO's own "2P mode" switch (pause menu) is GameDataHolder+0x245 (rs::isSeparatePlay 0x575af4).
+// Co-op runs only while it is on. The game itself is kept in 1P mode (see SeparatePlayHook), so
+// Cappy never goes to the second controller.
+static bool CoopModeOn(const void* sceneObjHolder) {
+    return sceneObjHolder != nullptr && rs::isSeparatePlay(sceneObjHolder);  // called from here: raw
+}
+static bool gReenterRequested = false;
+static s32 gModeMismatchFrames = 0;
+static s32 gModeFrames = 0;  // frames since stage init (counted in solo too)
+
 static void ResetStageState() {
     gP1 = gP2 = gP2Cap = nullptr;
     gP2Port = -1;
@@ -64,6 +74,9 @@ static void ResetStageState() {
     gP2RespawnPending = false;
     gGameOver = false;
     gForceP1Death = false;
+    gReenterRequested = false;
+    gModeMismatchFrames = 0;
+    gModeFrames = 0;
     gTalkP2 = false;
     gTalkNoDemoFrames = 0;
     gNpcTarget = nullptr;
@@ -526,6 +539,7 @@ HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
         COOP_LOG("Wardrobe: initModel entries=%d ports p1=%d p2=%d", n, p1Port, p2Port);
         if (p2Port < 0 || p2Port == p1Port) return;  // no Luigi this stage
         if (n <= 0 || arr == nullptr || scene == nullptr) return;
+        if (!coop::CoopModeOn(reinterpret_cast<u8*>(scene) + 0x20)) return;  // 2P mode off
         GameDataHolderWriter acc{nullptr};
         GameAccessorCtor(&acc, reinterpret_cast<u8*>(scene) + 0x20);
 
@@ -766,6 +780,46 @@ HOOK_DEFINE_TRAMPOLINE(PartsFixInitHook) {
     }
 };
 
+// ------------------------------------------------------------------------ 2P mode switch
+// Ghidra: rs::isSeparatePlay(holder) 0x575af4 = GameDataHolder(sceneObj 0x12)+0x245. Callers are
+// the pause menu (StageSceneStatePauseMenu 0x4e9d8c..0x4ebb54: shows/toggles "2P mode") and the
+// vanilla Cappy-for-player-2 code (PlayerInput, PlayerInputFunction, HackCap, StageScene::init ->
+// rs::setSeparatePlayMode, info windows...). Only the pause menu and this mod see the real
+// value; everything else is told 1P so vanilla 2P Cappy never starts.
+constexpr uintptr_t kPauseMenuBegin = 0x4e9d8c;
+constexpr uintptr_t kPauseMenuEnd = 0x4ebb54;
+constexpr uintptr_t kMainTextEnd = 0x1800000;
+HOOK_DEFINE_TRAMPOLINE(SeparatePlayHook) {
+    static bool Callback(const void* holder) {
+        uintptr_t off = reinterpret_cast<uintptr_t>(__builtin_return_address(0)) -
+                        exl::util::modules::GetTargetStart();
+        if ((off >= kPauseMenuBegin && off < kPauseMenuEnd) || off >= kMainTextEnd)
+            return Orig(holder);
+        return false;
+    }
+};
+
+namespace coop {
+// Switching 2P mode mid-stage: re-enter the stage (GameDataFunction::reenterStage sets
+// GameDataHolder+0x4a, picked up by rs::tryChangeNextStage) so Luigi joins or leaves.
+static void CheckModeSwitch(StageScene* scene) {
+    if (gReenterRequested || ++gModeFrames < 60) return;
+    const u8* holder = reinterpret_cast<const u8*>(scene) + 0x20;
+    bool want = CoopModeOn(holder);
+    s32 p2Port = al::getPlayerControllerPort(1);
+    if (want && (p2Port < 0 || p2Port == al::getPlayerControllerPort(0))) want = false;
+    bool have = gP2 != nullptr;
+    if (want == have) { gModeMismatchFrames = 0; return; }
+    if (++gModeMismatchFrames < 20) return;
+    GameDataHolderWriter w{nullptr};
+    GameAccessorCtor(&w, holder);
+    if (w.holder == nullptr) return;
+    gReenterRequested = true;
+    COOP_LOG("2P mode switched %s: re-entering the stage", want ? "on" : "off");
+    GameDataFunction::reenterStage(w);
+}
+}  // namespace coop
+
 HOOK_DEFINE_TRAMPOLINE(MainControllerPortHook) {
     static s32 Callback() {
         if ((coop::gUiPortP2 || coop::gClosetP2 || coop::gTalkP2) && coop::gP2Port >= 0)
@@ -846,6 +900,10 @@ HOOK_DEFINE_TRAMPOLINE(PlayerInitHook) {
         COOP_LOG("P1 initPlayer: P1 port=%d, controller order 1 -> port %d", p1Port, p2Port);
         if (p2Port < 0 || p2Port == p1Port) {
             COOP_LOG("No second controller connected; staying single-player.");
+            return;
+        }
+        if (!coop::CoopModeOn(reinterpret_cast<const u8*>(self) + 0x20)) {
+            COOP_LOG("2P mode is off; Mario plays solo.");
             return;
         }
 
@@ -1768,6 +1826,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
         Orig(scene);
         coop::hud::Update();
         coop::cam::Update();
+        coop::CheckModeSwitch(scene);
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return;
 
         if (coop::gTalkP2) {
@@ -1870,7 +1929,8 @@ extern "C" void exl_main(void* x0, void* x1) {
                          PlayerActorHakoniwa_endDemoPuppetable_bytes) &&
               CheckBytes(TalkNpc_movement, TalkNpc_movement_bytes) &&
               CheckBytes(PartsModel_initPartsFixFileNoRegister,
-                         PartsModel_initPartsFixFileNoRegister_bytes);
+                         PartsModel_initPartsFixFileNoRegister_bytes) &&
+              CheckBytes(rs_isSeparatePlay, rs_isSeparatePlay_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -1928,6 +1988,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     PlayerEndDemoPuppetableHook::InstallAtOffset(PlayerActorHakoniwa_endDemoPuppetable);
     TalkNpcMovementHook::InstallAtOffset(TalkNpc_movement);
     PartsFixInitHook::InstallAtOffset(PartsModel_initPartsFixFileNoRegister);
+    SeparatePlayHook::InstallAtOffset(rs_isSeparatePlay);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
