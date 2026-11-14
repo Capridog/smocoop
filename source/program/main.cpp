@@ -601,6 +601,8 @@ struct PreviewSlot {
     void* actor;
     void* info;
     void* dyn;
+    void* clothTex;  // Luigi icon (P2Luigi_TextureClothes) for entry +0x278
+    void* capTex;    // ... for entry +0x498
 };
 static u8* gState = nullptr;
 static PreviewSlot* gLuigiSlots = nullptr;
@@ -620,13 +622,23 @@ static void SwapEntries() {
     u8* arr = Field<u8*>(gState, 0x1a0);
     for (s32 i = 0; i < gSlotCount; i++) {
         PreviewSlot& s = gLuigiSlots[i];
-        if (s.actor == nullptr) continue;
         u8* e = arr + i * kEntryStride;
-        PreviewSlot m{Field<void*>(e, 0x58), Field<void*>(e, 0x4a0), Field<void*>(e, 0x4a8)};
+        // Icons: StageSceneStateCloset::updateExistItem (Ghidra 0x5d6008) rebuilds the list images
+        // from entry +0x278 (body) / +0x498 (cap) on every appear, so swapping them is enough.
+        if (s.clothTex != nullptr) {
+            void* t = Field<void*>(e, 0x278); SetField(e, 0x278, s.clothTex); s.clothTex = t;
+        }
+        if (s.capTex != nullptr) {
+            void* t = Field<void*>(e, 0x498); SetField(e, 0x498, s.capTex); s.capTex = t;
+        }
+        if (s.actor == nullptr) continue;
+        void* a = Field<void*>(e, 0x58);
+        void* in = Field<void*>(e, 0x4a0);
+        void* d = Field<void*>(e, 0x4a8);
         SetField(e, 0x58, s.actor);
         SetField(e, 0x4a0, s.info);
         SetField(e, 0x4a8, s.dyn);
-        s = m;
+        s.actor = a; s.info = in; s.dyn = d;
     }
     void* f = Field<void*>(gState, 0xe0);
     SetField(gState, 0xe0, gLuigiFollowMtx);
@@ -659,6 +671,10 @@ extern bool GameIsHaveCloth(GameDataHolderWriter acc, const char* name) asm(
     "_ZN2rs11isHaveClothE22GameDataHolderAccessorPKc");
 extern bool GameIsHaveCap(GameDataHolderWriter acc, const char* name) asm(
     "_ZN2rs9isHaveCapE22GameDataHolderAccessorPKc");
+
+extern void* GameCreateTextureInfo(const char* path, const char* bfres, const char* tex) asm(
+    "_ZN2al17createTextureInfoEPKcS1_S1_");
+static constexpr const char kLuigiIcons[] = "ObjectData/P2Luigi/P2Luigi_TextureClothes";
 
 HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
     static void Callback(u8* state, const al::ActorInitInfo& info) {
@@ -700,6 +716,20 @@ HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
                 if (isBody) body = name;
                 if (isCap) cap = name;
             }
+            // Luigi's icon for this entry (the green-capped icons of the Luigi pack).
+            if (isBody) gLuigiSlots[i].clothTex = GameCreateTextureInfo(kLuigiIcons, "TextureClothes", name);
+            if (isCap) {
+                char capName[96];
+                size_t ln = std::strlen(name);
+                if (ln + 4 < sizeof(capName)) {
+                    std::memcpy(capName, name, ln);
+                    std::memcpy(capName + ln, "Cap", 4);
+                    // "Mario" itself uses "Mario" for both lists (vanilla: "%sCap" except Mario)
+                    gLuigiSlots[i].capTex = GameCreateTextureInfo(kLuigiIcons, "TextureClothes", capName);
+                    if (gLuigiSlots[i].capTex == nullptr)
+                        gLuigiSlots[i].capTex = GameCreateTextureInfo(kLuigiIcons, "TextureClothes", name);
+                }
+            }
             bool owned = std::strcmp(name, "Mario") == 0 ||
                          (isBody && GameIsHaveCloth(acc, name)) ||
                          (isCap && GameIsHaveCap(acc, name));
@@ -711,7 +741,9 @@ HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
             void* ci = GameInitMarioModelActorCloset(&dyn, actor, info, body, cap, playerConst,
                                                      state + 0xc8, state + 0xd4, state + 0xe0,
                                                      state + 0xe8);
-            gLuigiSlots[i] = PreviewSlot{actor, ci, dyn};
+            gLuigiSlots[i].actor = actor;
+            gLuigiSlots[i].info = ci;
+            gLuigiSlots[i].dyn = dyn;
             built++;
         }
         coop::gLuigiCloset = false;
@@ -957,6 +989,112 @@ HOOK_DEFINE_TRAMPOLINE(CapStartHackHook) {
             }
         }
         return Orig(cap, sender);
+    }
+};
+
+// ------------------------------------------------------------------------ Luigi-only outfits
+// The update outfits (Satellaview, Sunshine, Racer, Broodals, Santa, ...) are appended to the
+// 1.0.0 shop list (romfs SystemData/ItemList). Only Luigi gets them: Mario's closet treats them
+// as not owned, and Mario's Crazy Cap counter leaves them out.
+namespace coop::extra {
+static const char* const kNames[] = {"MarioBandman", "MarioSunshine", "MarioArmorWestern", "MarioSatellite",
+                                     "MarioBatter",  "MarioTopper",   "MarioRacer",        "MarioRango",
+                                     "MarioHariet",  "MarioSpewart",  "MarioConductor",    "MarioZombie",
+                                     "MarioSanta",   "MarioDot3d"};
+static bool IsExtra(const char* name) {
+    if (name == nullptr) return false;
+    for (const char* n : kNames) if (std::strcmp(n, name) == 0) return true;
+    return false;
+}
+// ShopInfo: PtrArray<ShopLayoutItemInfo> at +0x40 (size) / +0x48 (data), +0x50 = full count
+// (ShopInfo::createShopItemList / updateItemPartsData, Ghidra 0x309038 / 0x309224). Element ->
+// ShopItem::ItemInfo*, name at +4. Mario: move the extra outfits to the end and shorten the
+// array; Luigi: full array again (updateItemSort re-sorts it on appear).
+static void FilterShop(u8* info, bool luigi) {
+    if (info == nullptr) return;
+    s32 full = Field<s32>(info, 0x50);
+    auto** data = Field<u8**>(info, 0x48);
+    if (data == nullptr || full <= 0) return;
+    if (luigi) { SetField<s32>(info, 0x40, full); return; }
+    s32 keep = 0;
+    for (s32 i = 0; i < full; i++) {
+        u8* item = data[i] ? Field<u8*>(data[i], 0) : nullptr;
+        if (item != nullptr && IsExtra(reinterpret_cast<const char*>(item + 4))) continue;
+        u8* e = data[i]; data[i] = data[keep]; data[keep] = e; keep++;
+    }
+    SetField<s32>(info, 0x40, keep);
+}
+// Crazy Cap icons: ShopLayoutInfo::loadTexture (Ghidra 0x307e00) loads one TextureInfo per item
+// at stage init into ShopLayoutInfo +0x48 (count +0x58). While it runs, every clothes icon is
+// also loaded from Luigi's P2Luigi_TextureClothes, and the pairs are swapped in per counter visit.
+struct TexPair { void* mario; void* luigi; };
+static TexPair gTex[512];
+static s32 gTexN = 0;
+static bool gInShopLoad = false;
+static void Reset() { gTexN = 0; gInShopLoad = false; }
+static void SwapShopIcons(u8* info, bool luigi) {
+    u8* li = info ? Field<u8*>(info, 0) : nullptr;
+    if (li == nullptr) return;
+    void** tex = Field<void**>(li, 0x48);
+    s32 n = Field<s32>(li, 0x58);
+    if (tex == nullptr) return;
+    for (s32 i = 0; i < n; i++) {
+        for (s32 k = 0; k < gTexN; k++) {
+            if (luigi && tex[i] == gTex[k].mario) { tex[i] = gTex[k].luigi; break; }
+            if (!luigi && tex[i] == gTex[k].luigi) { tex[i] = gTex[k].mario; break; }
+        }
+    }
+}
+}  // namespace coop::extra
+HOOK_DEFINE_TRAMPOLINE(ShopLoadTextureHook) {
+    static void Callback(void* li, const void* list, s32 n, const char* world) {
+        coop::extra::gInShopLoad = true;
+        Orig(li, list, n, world);
+        coop::extra::gInShopLoad = false;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(CreateTextureInfoHook) {
+    static void* Callback(const char* path, const char* bfres, const char* tex) {
+        void* r = Orig(path, bfres, tex);
+        using namespace coop::extra;
+        if (gInShopLoad && r != nullptr && gTexN < 512 && path != nullptr &&
+            std::strcmp(path, "ObjectData/TextureClothes") == 0) {
+            void* l = Orig("ObjectData/P2Luigi/P2Luigi_TextureClothes", bfres, tex);
+            if (l != nullptr) gTex[gTexN++] = {r, l};
+        }
+        return r;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(ShopAppearHook) {
+    static void Callback(u8* state) {
+        u32 n = coop::Field<u32>(state, 0x52 * 8), idx = coop::Field<u32>(state, 0x54 * 8);
+        u8** infos = coop::Field<u8**>(state, 0x53 * 8);
+        if (infos != nullptr && idx < n) {
+            bool luigi = coop::gTalkP2;
+            coop::extra::FilterShop(infos[idx], luigi);
+            coop::extra::SwapShopIcons(infos[idx], luigi);
+            COOP_LOG("Shop: %s counter", luigi ? "Luigi's (all outfits)" : "Mario's (update outfits hidden)");
+        }
+        Orig(state);
+    }
+};
+// StageSceneStateCloset::updateExistItem (Ghidra 0x5d6008) asks rs::isHaveCloth/isHaveCap by name.
+HOOK_DEFINE_TRAMPOLINE(IsHaveClothHook) {
+    static bool Callback(u8* holder, const char* name) {
+        bool r = Orig(holder, name);
+        if (r && !coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0)) &&
+            coop::extra::IsExtra(name))
+            return false;  // Mario's closet: Luigi-only outfit
+        return r;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(IsHaveCapHook) {
+    static bool Callback(u8* holder, const char* name) {
+        bool r = Orig(holder, name);
+        if (r && !coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0)) &&
+            coop::extra::IsExtra(name))
+            return false;
+        return r;
     }
 };
 
@@ -1657,6 +1795,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneDtorHook) {
         coop::cut::Reset();
         coop::carry::Reset();
         coop::flag::Reset();
+        coop::extra::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
         COOP_LOG("StageScene destroyed: co-op state cleared");
@@ -3531,6 +3670,11 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(rs_requestStartDemoNormalTalk, rs_requestStartDemoTalk_bytes) &&
               CheckBytes(rs_requestStartDemoWithPlayer, rs_requestStartDemoWithPlayer_bytes) &&
               CheckBytes(HackCap_sendMsgStartHack, HackCap_sendMsgStartHack_bytes) &&
+              CheckBytes(rs_isHaveCloth, rs_isHaveCloth_bytes) &&
+              CheckBytes(rs_isHaveCap, rs_isHaveCap_bytes) &&
+              CheckBytes(ShopStateInShop_appear, ShopStateInShop_appear_bytes) &&
+              CheckBytes(al_createTextureInfo_path, al_createTextureInfo_path_bytes) &&
+              CheckBytes(ShopLayoutInfo_loadTexture, ShopLayoutInfo_loadTexture_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
@@ -3638,6 +3782,11 @@ extern "C" void exl_main(void* x0, void* x1) {
     NpcDemoNormalHook::InstallAtOffset(rs_requestStartDemoNormalTalk);
     DemoWithPlayerHook::InstallAtOffset(rs_requestStartDemoWithPlayer);
     CapStartHackHook::InstallAtOffset(HackCap_sendMsgStartHack);
+    ShopAppearHook::InstallAtOffset(ShopStateInShop_appear);
+    ShopLoadTextureHook::InstallAtOffset(ShopLayoutInfo_loadTexture);
+    CreateTextureInfoHook::InstallAtOffset(al_createTextureInfo_path);
+    IsHaveClothHook::InstallAtOffset(rs_isHaveCloth);
+    IsHaveCapHook::InstallAtOffset(rs_isHaveCap);
     DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);
     DemoAppearFromHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoAppearFromHome);
     StartActionDemoPlayerHook::InstallAtOffset(rs_startActionDemoPlayer);
