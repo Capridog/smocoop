@@ -943,7 +943,10 @@ HOOK_DEFINE_TRAMPOLINE(DemoWithPlayerHook) {
 // so both could end up in the same Bullet Bill and the second got stuck. Cappy refuses to capture
 // what the other brother is capturing.
 HOOK_DEFINE_TRAMPOLINE(CapStartHackHook) {
-    static bool Callback(al::LiveActor* cap, void* target) {
+    static bool Callback(al::LiveActor* cap, void* sender) {
+        // sendMsgSensorToSensor(msg, sender = arg, receiver = cap+0x1d0): the target is the cap's
+        // locked sensor at +0x1d0, not the argument (Ghidra 0x4fc09c).
+        void* target = coop::Field<void*>(cap, 0x1d0);
         if (coop::gP1 != nullptr && coop::gP2 != nullptr && target != nullptr) {
             al::LiveActor* owner = coop::Field<al::LiveActor*>(cap, smo100::HackCap_player);
             al::LiveActor* other = owner == coop::gP1 ? coop::gP2 : owner == coop::gP2 ? coop::gP1 : nullptr;
@@ -953,7 +956,7 @@ HOOK_DEFINE_TRAMPOLINE(CapStartHackHook) {
                 return false;
             }
         }
-        return Orig(cap, target);
+        return Orig(cap, sender);
     }
 };
 
