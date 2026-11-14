@@ -476,4 +476,7 @@ constexpr ptrdiff_t rs_requestStartDemoWithPlayer = 0x54f740;
 constexpr u64 rs_requestStartDemoWithPlayer_bytes = 0xa9017bfda9be4ff4ULL;
 constexpr ptrdiff_t Closet_receiveMsg_demoRet = 0x24ea40;
 constexpr ptrdiff_t ShoppingWatcherStateWear_demoRet = 0x316cf0;
+// HackCap::sendMsgStartHack(HitSensor* target): Cappy asks the target to be captured
+constexpr ptrdiff_t HackCap_sendMsgStartHack = 0x3fc09c;
+constexpr u64 HackCap_sendMsgStartHack_bytes = 0xa9014ff4f81d0ff5ULL;
 }  // namespace smo100

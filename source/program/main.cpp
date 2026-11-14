@@ -18,6 +18,7 @@
 #define COOP_LOG(...) Logging.Log("[OdysseyCoop] " __VA_ARGS__)
 
 extern sead::Heap* HeapMgrSetCurrentHeap(void*, sead::Heap*) asm("_ZN4sead7HeapMgr15setCurrentHeap_EPNS_4HeapE");
+extern al::LiveActor* AlGetSensorHost(const void*) asm("_ZN2al13getSensorHostEPKNS_9HitSensorE");
 namespace coop {
 static bool gInStageSceneInit = false;  // only spawn P2 while StageScene::init runs
 static bool gSpawningP2 = false;        // re-entrancy guard
@@ -938,6 +939,24 @@ HOOK_DEFINE_TRAMPOLINE(DemoWithPlayerHook) {
     }
 };
 
+// Captures: a target accepts a start-hack message even when the other brother already captured it,
+// so both could end up in the same Bullet Bill and the second got stuck. Cappy refuses to capture
+// what the other brother is capturing.
+HOOK_DEFINE_TRAMPOLINE(CapStartHackHook) {
+    static bool Callback(al::LiveActor* cap, void* target) {
+        if (coop::gP1 != nullptr && coop::gP2 != nullptr && target != nullptr) {
+            al::LiveActor* owner = coop::Field<al::LiveActor*>(cap, smo100::HackCap_player);
+            al::LiveActor* other = owner == coop::gP1 ? coop::gP2 : owner == coop::gP2 ? coop::gP1 : nullptr;
+            al::LiveActor* host = AlGetSensorHost(target);
+            if (other != nullptr && host != nullptr && coop::HackActorOf(other) == host) {
+                COOP_LOG("Capture refused: P%d already has it", other == coop::gP1 ? 1 : 2);
+                return false;
+            }
+        }
+        return Orig(cap, target);
+    }
+};
+
 // RC car (Metro Kingdom): driving it is a capture of the RC man; StageScene::exeDemoHackStart and
 // StageSceneStateRadicon::exeRadicon switch to / keep the RC view only while
 // rs::isPlayerHackRadiconNpc(rs::getPlayerActor(scene)) (player 0) is true (Ghidra 0x4cef3c,
@@ -960,7 +979,6 @@ HOOK_DEFINE_TRAMPOLINE(IsPlayerHackRadiconHook) {
 // original model is hidden and the twin follows its pose and action frame. Luigi's flags are
 // remembered by position in sd:/OdysseyCoop/luigiflags.txt.
 extern void LiveActorCtor(void*, const char*) asm("_ZN2al9LiveActorC1EPKc");
-extern al::LiveActor* AlGetSensorHost(const void*) asm("_ZN2al13getSensorHostEPKNS_9HitSensorE");
 extern void LiveActorMakeAlive(void*) asm("_ZN2al9LiveActor14makeActorAliveEv");
 extern void LiveActorMakeDead(void*) asm("_ZN2al9LiveActor13makeActorDeadEv");
 extern void AlInitActorWithArchiveName(al::LiveActor*, const void*, const coop::luigi::SafeStr&, const char*) asm(
@@ -3498,6 +3516,7 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(rs_requestStartDemoWithPlayerUseCoinTalk, rs_requestStartDemoTalk_bytes) &&
               CheckBytes(rs_requestStartDemoNormalTalk, rs_requestStartDemoTalk_bytes) &&
               CheckBytes(rs_requestStartDemoWithPlayer, rs_requestStartDemoWithPlayer_bytes) &&
+              CheckBytes(HackCap_sendMsgStartHack, HackCap_sendMsgStartHack_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
@@ -3604,6 +3623,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     NpcDemoUseCoinHook::InstallAtOffset(rs_requestStartDemoWithPlayerUseCoinTalk);
     NpcDemoNormalHook::InstallAtOffset(rs_requestStartDemoNormalTalk);
     DemoWithPlayerHook::InstallAtOffset(rs_requestStartDemoWithPlayer);
+    CapStartHackHook::InstallAtOffset(HackCap_sendMsgStartHack);
     DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);
     DemoAppearFromHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoAppearFromHome);
     StartActionDemoPlayerHook::InstallAtOffset(rs_startActionDemoPlayer);
