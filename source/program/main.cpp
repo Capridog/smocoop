@@ -265,6 +265,9 @@ namespace coop::flag {
 static void Reset();
 static void Update();
 }  // namespace coop::flag
+namespace coop::ride {
+static void Update();
+}  // namespace coop::ride
 
 // ---------------------------------------------------------------------------- spawning (step 2)
 
@@ -833,7 +836,9 @@ extern void RsHideDemoPlayer(const al::LiveActor*) asm("_ZN2rs14hideDemoPlayerEP
 extern void RsShowDemoPlayer(const al::LiveActor*) asm("_ZN2rs14showDemoPlayerEPKN2al9LiveActorE");
 namespace coop::cut {
 static al::LiveActor* gHidden = nullptr;
-static void Reset() { gHidden = nullptr; }
+static bool gRideRequest = false;  // Odyssey take-off / kingdom arrival being requested
+static bool gRide = false;         // ...and running: Luigi rides along beside Mario
+static void Reset() { gHidden = nullptr; gRideRequest = false; gRide = false; }
 }  // namespace coop::cut
 HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
     static bool Callback(void* dir, const char* name, s32 type) {
@@ -841,6 +846,11 @@ HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
         bool r = Orig(dir, name, type);
         if (!r || capture || type < 3 || type == 9 || coop::gTalkP2 || coop::gClosetP2) return r;
         if (coop::gP1 == nullptr || coop::gP2 == nullptr || coop::cut::gHidden != nullptr) return r;
+        if (coop::cut::gRideRequest && !al::isDead(coop::gP2) && coop::gBubbleBusy[1] <= 60) {
+            coop::cut::gRide = true;  // Luigi stays visible and mirrors Mario (see coop::ride)
+            COOP_LOG("Cutscene %s: Luigi rides along", name ? name : "?");
+            return r;
+        }
         bool p2Leads = coop::gLeadP2 || coop::boss::RaceWinnerIsP2();
         al::LiveActor* other = p2Leads ? coop::gP1 : coop::gP2;
         s32 slot = other == coop::gP1 ? 0 : 1;
@@ -854,6 +864,10 @@ HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
 HOOK_DEFINE_TRAMPOLINE(DemoEndHook) {
     static u64 Callback(void* dir, const char* name, s32 type) {
         u64 ret = Orig(dir, name, type);
+        if (coop::cut::gRide) {
+            coop::cut::gRide = false;
+            if (coop::gP1 != nullptr && coop::gP2 != nullptr) coop::PlaceBeside(coop::gP2, coop::gP1, "after Odyssey scene");
+        }
         al::LiveActor* h = coop::cut::gHidden;
         if (h == nullptr) return ret;
         coop::cut::gHidden = nullptr;
@@ -1030,6 +1044,79 @@ HOOK_DEFINE_TRAMPOLINE(CheckpointFlagReceiveMsgHook) {
             coop::flag::SetOwner(flag, luigi);
         }
         return r;
+    }
+};
+
+// ------------------------------------------------------------------------ riding the Odyssey
+// Take-off (ProjectDemoDirector::requestStartDemoReturnToHome 0xd63c8) and kingdom arrival
+// (requestStartDemoAppearFromHome 0xd6240) are type-3 scenes that move only player 0 through
+// the rs::*DemoPlayer helpers (resolved from the calling actor's player 0). For these two, Luigi
+// is not hidden: every action/frame/visibility call made for Mario is repeated for Luigi (the
+// helper resolves player 0 of gP2 as Luigi), and each frame Luigi is put at Mario's demo pose
+// shifted 120 units to his left.
+struct Quat4 { float x, y, z, w; };  // sead::Quat<float> layout
+extern void RsReplaceDemoPlayer(const al::LiveActor*, const sead::Vector3f&, const Quat4&) asm(
+    "_ZN2rs17replaceDemoPlayerEPKN2al9LiveActorERKN4sead7Vector3IfEERKNS4_4QuatIfEE");
+extern const sead::Vector3f& RsGetDemoPlayerTrans(const al::LiveActor*) asm("_ZN2rs18getDemoPlayerTransEPKN2al9LiveActorE");
+extern const Quat4& RsGetDemoPlayerQuat(const al::LiveActor*) asm("_ZN2rs17getDemoPlayerQuatEPKN2al9LiveActorE");
+namespace coop::ride {
+static void Update() {
+    if (!coop::cut::gRide || coop::gP1 == nullptr || coop::gP2 == nullptr) return;
+    const sead::Vector3f& t = RsGetDemoPlayerTrans(coop::gP1);
+    const Quat4& q = RsGetDemoPlayerQuat(coop::gP1);
+    // the quat's local +X (side) axis
+    float sx = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+    float sy = 2.0f * (q.x * q.y + q.w * q.z);
+    float sz = 2.0f * (q.x * q.z - q.w * q.y);
+    sead::Vector3f pos = {t.x - sx * 120.0f, t.y - sy * 120.0f, t.z - sz * 120.0f};
+    RsReplaceDemoPlayer(coop::gP2, pos, q);
+}
+static bool Mirror(const al::LiveActor* a) { return coop::cut::gRide && coop::gP2 != nullptr && a != coop::gP2; }
+}  // namespace coop::ride
+HOOK_DEFINE_TRAMPOLINE(DemoReturnToHomeHook) {
+    static bool Callback(void* dir, const char* name) {
+        coop::cut::gRideRequest = true;
+        bool r = Orig(dir, name);
+        coop::cut::gRideRequest = false;
+        return r;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(DemoAppearFromHomeHook) {
+    static bool Callback(void* dir, const char* name) {
+        coop::cut::gRideRequest = true;
+        bool r = Orig(dir, name);
+        coop::cut::gRideRequest = false;
+        return r;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(StartActionDemoPlayerHook) {
+    static void Callback(const al::LiveActor* a, const char* name) {
+        Orig(a, name);
+        if (coop::ride::Mirror(a)) Orig(coop::gP2, name);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(SetActionFrameDemoPlayerHook) {
+    static void Callback(const al::LiveActor* a, float f) {
+        Orig(a, f);
+        if (coop::ride::Mirror(a)) Orig(coop::gP2, f);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(SetActionFrameRateDemoPlayerHook) {
+    static void Callback(const al::LiveActor* a, float f) {
+        Orig(a, f);
+        if (coop::ride::Mirror(a)) Orig(coop::gP2, f);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(HideDemoPlayerHook) {
+    static void Callback(const al::LiveActor* a) {
+        Orig(a);
+        if (coop::ride::Mirror(a)) Orig(coop::gP2);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(ShowDemoPlayerHook) {
+    static void Callback(const al::LiveActor* a) {
+        Orig(a);
+        if (coop::ride::Mirror(a)) Orig(coop::gP2);
     }
 };
 // ------------------------------------------------------------------------ captures for both
@@ -3108,6 +3195,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
 
         coop::collide::Update();
         coop::flag::Update();
+        coop::ride::Update();
         coop::dim::Update();
         if (coop::gLeadP2) {
             bool demo = rs::isActiveDemo(coop::gP1) || rs::isActiveDemo(coop::gP2);
@@ -3284,7 +3372,14 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_getPlayerPos_actor, al_getPlayerPos_actor_bytes) &&
               CheckBytes(rs_isPlayerHackRadiconNpc, rs_isPlayerHackRadiconNpc_bytes) &&
               CheckBytes(CheckpointFlag_init, CheckpointFlag_init_bytes) &&
-              CheckBytes(CheckpointFlag_receiveMsg, CheckpointFlag_receiveMsg_bytes);
+              CheckBytes(CheckpointFlag_receiveMsg, CheckpointFlag_receiveMsg_bytes) &&
+              CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
+              CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
+              CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
+              CheckBytes(rs_setActionFrameDemoPlayer, rs_setActionFrameDemoPlayer_bytes) &&
+              CheckBytes(rs_setActionFrameRateDemoPlayer, rs_setActionFrameDemoPlayer_bytes) &&
+              CheckBytes(rs_hideDemoPlayer, rs_hideShowDemoPlayer_bytes) &&
+              CheckBytes(rs_showDemoPlayer, rs_hideShowDemoPlayer_bytes);
     if (!ok) {
         COOP_LOG("Not SMO 1.0.0 (hook-site bytes differ). No hooks installed.");
         return;
@@ -3376,6 +3471,13 @@ extern "C" void exl_main(void* x0, void* x1) {
     IsPlayerHackRadiconHook::InstallAtOffset(rs_isPlayerHackRadiconNpc);
     CheckpointFlagInitHook::InstallAtOffset(CheckpointFlag_init);
     CheckpointFlagReceiveMsgHook::InstallAtOffset(CheckpointFlag_receiveMsg);
+    DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);
+    DemoAppearFromHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoAppearFromHome);
+    StartActionDemoPlayerHook::InstallAtOffset(rs_startActionDemoPlayer);
+    SetActionFrameDemoPlayerHook::InstallAtOffset(rs_setActionFrameDemoPlayer);
+    SetActionFrameRateDemoPlayerHook::InstallAtOffset(rs_setActionFrameRateDemoPlayer);
+    HideDemoPlayerHook::InstallAtOffset(rs_hideDemoPlayer);
+    ShowDemoPlayerHook::InstallAtOffset(rs_showDemoPlayer);
     COOP_LOG("Hooks installed (SMO 1.0.0, step 4 camera + bubble).");
 }
 
