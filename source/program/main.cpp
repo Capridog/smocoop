@@ -997,6 +997,7 @@ extern void RsHideDemoPlayer(const al::LiveActor*) asm("_ZN2rs14hideDemoPlayerEP
 extern void RsShowDemoPlayer(const al::LiveActor*) asm("_ZN2rs14showDemoPlayerEPKN2al9LiveActorE");
 extern bool HackCapIsHide(const al::LiveActor*) asm("_ZNK7HackCap6isHideEv");
 extern void HackCapRequestReturn(al::LiveActor*, bool*) asm("_ZN7HackCap13requestReturnEPb");
+extern const void* AlNerveKeeperGetCurrentNerve(const void*) asm("_ZNK2al11NerveKeeper15getCurrentNerveEv");
 extern void RsForcePutOnDemoCap(const al::LiveActor*) asm("_ZN2rs17forcePutOnDemoCapEPKN2al9LiveActorE");
 namespace coop::cut {
 static al::LiveActor* gHidden = nullptr;
@@ -1005,6 +1006,7 @@ static bool gRide = false;         // ...and running: Luigi rides along beside M
 static bool gRocketRequest = false;  // the request comes from the Odyssey itself (globe, moons, take-off)
 static bool gRidePose = false;     // ride moves Luigi to Mario's demo pose (arrival / return); off for Odyssey scenes
 static s32 gNpcDemo = 0;           // inside an NPC event scene request (rs::requestStartDemo*Talk)
+static s32 gWatch = 0;             // frames left of logging Luigi after an Odyssey scene (diagnostics)
 static void Reset() { gHidden = nullptr; gRideRequest = false; gRide = false; gRocketRequest = false; gRidePose = false; gNpcDemo = 0; }
 }  // namespace coop::cut
 HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
@@ -1021,7 +1023,10 @@ HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
             // where he stands and only vanishes/reappears with Mario (boarding); following Mario's
             // demo pose there pushed him into / under the hull.
             coop::cut::gRidePose = !coop::cut::gRocketRequest;
-            COOP_LOG("Cutscene %s: Luigi rides along", name ? name : "?");
+            COOP_LOG("Cutscene %s: Luigi rides along%s, Luigi at (%.0f, %.0f, %.0f)", name ? name : "?",
+                     coop::cut::gRocketRequest ? " (Odyssey globe/moons/take-off)" : "", al::getTrans(coop::gP2).x,
+                     al::getTrans(coop::gP2).y, al::getTrans(coop::gP2).z);
+            coop::cut::gWatch = 0;
             return r;
         }
         // NPC scenes (talking, cut-scene talks, moon hand-overs): both brothers stay in view.
@@ -1056,6 +1061,7 @@ HOOK_DEFINE_TRAMPOLINE(DemoEndHook) {
             if (coop::gP1 != nullptr && coop::gP2 != nullptr) {
                 RsShowDemoPlayer(coop::gP2);  // undo any mirrored hide (e.g. Mario hidden inside the ship)
                 coop::PlaceBeside(coop::gP2, coop::gP1, "after Odyssey scene");
+                coop::cut::gWatch = 180;
             }
         }
         al::LiveActor* h = coop::cut::gHidden;
@@ -3220,6 +3226,30 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
 
         const sead::Vector3f& pos = al::getTrans(actor);
         sead::Vector3f goal = BubbleHoverPoint(slot, rescuer);
+        if (coop::GameIsPlayer2DEarly(rescuer)) {
+            // 8-bit wall: the bubble stays in front of the wall (camera side) so it never passes
+            // through it, and only comes close to the wall plane as it reaches the rescuer.
+            sead::Vector3f fr;
+            coop::AlCalcFrontDir(&fr, rescuer);
+            sead::Vector3f n = {-fr.z, 0.0f, fr.x};  // horizontal, perpendicular to the wall plane
+            auto* camUser = reinterpret_cast<const al::IUseCamera*>(
+                reinterpret_cast<const u8*>(rescuer) + smo100::LiveActor_IUseCamera);
+            const sead::Vector3f& cp = al::getCameraPos(camUser, 0);
+            const sead::Vector3f& rt = al::getTrans(rescuer);
+            if ((cp.x - rt.x) * n.x + (cp.z - rt.z) * n.z < 0.0f) { n.x = -n.x; n.z = -n.z; }
+            float nl = __builtin_sqrtf(n.x * n.x + n.z * n.z);
+            if (nl > 0.001f) {
+                n.x /= nl; n.z /= nl;
+                float gx = goal.x - pos.x, gy = goal.y - pos.y, gz = goal.z - pos.z;
+                float far = __builtin_sqrtf(gx * gx + gy * gy + gz * gz);
+                float depth = 80.0f + (far > 300.0f ? (far - 300.0f < 700.0f ? far - 300.0f : 700.0f) : 0.0f);
+                goal.x += n.x * depth;
+                goal.z += n.z * depth;
+                // already behind the wall plane: come straight out to the front first
+                float side = (pos.x - rt.x) * n.x + (pos.z - rt.z) * n.z;
+                if (side < 40.0f) { goal.x = pos.x + n.x * 300.0f; goal.y = pos.y; goal.z = pos.z + n.z * 300.0f; }
+            }
+        }
         sead::Vector3f d = {goal.x - pos.x, goal.y - pos.y, goal.z - pos.z};
         float dist = __builtin_sqrtf(d.x * d.x + d.y * d.y + d.z * d.z);
         float speed = dist * kBubbleEase;
@@ -3742,6 +3772,9 @@ namespace coop::dim {
 static bool gWas2D[2] = {false, false};
 static s32 gTimer = 0;
 static s32 gLeader = -1;
+static s32 gRetry = 0;        // frames until we check that the brought-out brother really is 3D
+static s32 gRetryLeader = -1;
+static s32 gRetryCount = 0;
 static void Update() {
     bool now[2];
     for (s32 i = 0; i < 2; i++) {
@@ -3759,14 +3792,41 @@ static void Update() {
     if (gTimer > 0 && --gTimer == 0 && gLeader >= 0) {
         s32 f = 1 - gLeader;
         if (now[f] && !now[gLeader]) {
-            PlaceBeside(PlayerAt(f), PlayerAt(gLeader), "left 2D together");
+            // A spot beside him can still be inside the 2D area (he just stepped out of its
+            // edge): use exactly where he stands, which is outside it, and drop any 2D keep.
+            al::LiveActor* who = PlayerAt(f);
+            al::LiveActor* lead = PlayerAt(gLeader);
+            coop::echo::Copy2D(lead, who);
+            sead::Vector3f dst = al::getTrans(lead);
+            dst.y += 5.0f;
+            al::resetPosition(who, dst);
+            al::setVelocityZero(who);
+            gIgnoreJumps = 3;
+            gRetry = 20;
+            gRetryLeader = gLeader;
+            COOP_LOG("2D: P%d brought out to P%d at (%.0f, %.0f, %.0f)", f + 1, gLeader + 1, dst.x, dst.y,
+                     dst.z);
         }
         gLeader = -1;
+    }
+    if (gRetry > 0 && --gRetry == 0 && gRetryLeader >= 0) {
+        s32 f = 1 - gRetryLeader;
+        if (now[f] && !now[gRetryLeader] && gRetryCount < 3 && gBubbleBusy[f] == 0) {
+            gRetryCount++;
+            gLeader = gRetryLeader;
+            gTimer = 1;  // try again next frame
+            COOP_LOG("2D: P%d is still in the wall, trying again (%d)", f + 1, gRetryCount);
+        } else {
+            gRetryCount = 0;
+            gRetryLeader = -1;
+        }
     }
     gWas2D[0] = now[0];
     gWas2D[1] = now[1];
 }
-static void Reset() { gWas2D[0] = gWas2D[1] = false; gTimer = 0; gLeader = -1; }
+static void Reset() {
+    gWas2D[0] = gWas2D[1] = false; gTimer = 0; gLeader = -1; gRetry = 0; gRetryLeader = -1; gRetryCount = 0;
+}
 }  // namespace coop::dim
 
 HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
@@ -3778,6 +3838,22 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return;
 
         coop::collide::Update();
+        if (coop::cut::gWatch > 0) {  // diagnostics: where is Luigi and what is he doing after an Odyssey scene
+            s32 w = coop::cut::gWatch--;
+            if (w % 15 == 0) {
+                auto nerveOf = [](al::LiveActor* a) -> unsigned long {
+                    void* nk = coop::Field<void*>(a, 0x90);
+                    const void* n = nk ? AlNerveKeeperGetCurrentNerve(nk) : nullptr;
+                    return n ? (unsigned long)((uintptr_t)n - exl::util::modules::GetTargetStart()) : 0;
+                };
+                const sead::Vector3f& a = al::getTrans(coop::gP1);
+                const sead::Vector3f& b = al::getTrans(coop::gP2);
+                COOP_LOG("Watch: P1 (%.0f,%.0f,%.0f) nerve 0x%lx demo %d | P2 (%.0f,%.0f,%.0f) nerve 0x%lx demo %d cap %s",
+                         a.x, a.y, a.z, nerveOf(coop::gP1), rs::isActiveDemo(coop::gP1) ? 1 : 0, b.x, b.y, b.z,
+                         nerveOf(coop::gP2), rs::isActiveDemo(coop::gP2) ? 1 : 0,
+                         coop::gP2Cap && HackCapIsHide(coop::gP2Cap) ? "on head" : "out");
+            }
+        }
         coop::flag::Update();
         coop::ride::Update();
         coop::dim::Update();
