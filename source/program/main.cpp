@@ -2808,6 +2808,14 @@ static void WriteFlags2D(void* pup, s32 flags) {
     coop::SetField<u8>(dim, 0xb, (u8)((flags >> 8) & 0xff));
     coop::SetField<u8>(pup, 0xae, (u8)((flags >> 16) & 0xff));
 }
+// Copy one brother's 2D state (validate2D / keepOn2D / snap2D flags) to the other.
+static void Copy2D(al::LiveActor* from, al::LiveActor* to) {
+    void* a = from ? coop::Field<void*>(from, smo100::PlayerActorHakoniwa_puppet) : nullptr;
+    void* b = to ? coop::Field<void*>(to, smo100::PlayerActorHakoniwa_puppet) : nullptr;
+    if (a == nullptr || b == nullptr) return;
+    s32 f = ReadFlags2D(a);
+    if (f >= 0) WriteFlags2D(b, f);
+}
 static bool IsBinding(void* pup) {
     return coop::Field<void*>(pup, 0x70) != nullptr && coop::Field<void*>(pup, 0x78) != nullptr;
 }
@@ -3123,6 +3131,7 @@ constexpr float kBubbleMaxSpeed = 12.0f;   // units per frame near the rescuer
 constexpr float kBubbleFarSpeed = 30.0f;   // when far away (catch-up)
 constexpr s32 kBubbleNoPopFrames = 30;
 static bool gBubblePop[2] = {false, false};
+static bool gBubbleInto2D[2] = {false, false};  // popped by a brother in a 2D section
 static sead::Vector3f gBubblePopPos[2] = {};
 
 extern void GameSetVelocity(al::LiveActor*, const sead::Vector3f&) asm(
@@ -3173,7 +3182,7 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
             sead::Vector3f spot = coop::FindSpotBeside(rescuer);
             const sead::Vector3f& t = al::getTrans(rescuer);
             gAimOffset[slot] = {spot.x - t.x, spot.y - t.y, spot.z - t.z};
-            gBubblePop[slot] = false;
+            gBubblePop[slot] = false; gBubbleInto2D[slot] = false;
             coop::SetField<s32>(state, smo100::RecoveryDead_flightFrames, 0x3fffffff);
             s32 spin = coop::Field<s32>(state, smo100::RecoveryDead_spinFrames) / 2;
             coop::SetField<s32>(state, smo100::RecoveryDead_spinFrames, spin < 1 ? 1 : spin);
@@ -3215,6 +3224,25 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
             if (capPop) COOP_LOG("Bubble: hit by P%d's Cappy", rescuerSlot + 1);
             sead::Vector3f pp = pos;
             if (pp.y < r.y + 40.0f) pp.y = r.y + 40.0f;  // never pop below the rescuer's feet
+            if (coop::GameIsPlayer2DEarly(rescuer)) {
+                // 8-bit wall: drop him onto the rescuer's wall plane (same depth as him, along
+                // the direction he faces in 2D), then he is switched to 2D when the drop starts.
+                sead::Vector3f fr;
+                coop::AlCalcFrontDir(&fr, rescuer);
+                fr.y = 0.0f;
+                float fl = __builtin_sqrtf(fr.x * fr.x + fr.z * fr.z);
+                float along = 0.0f;
+                if (fl > 0.001f) {
+                    fr.x /= fl; fr.z /= fl;
+                    along = (pos.x - r.x) * fr.x + (pos.z - r.z) * fr.z;
+                    if (along > 150.0f) along = 150.0f;
+                    if (along < -150.0f) along = -150.0f;
+                }
+                pp.x = r.x + fr.x * along;
+                pp.z = r.z + fr.z * along;
+                if (pp.y > r.y + 150.0f) pp.y = r.y + 150.0f;
+                gBubbleInto2D[slot] = true;
+            }
             gBubblePopPos[slot] = pp;
             gBubblePop[slot] = true;
         }
@@ -3231,6 +3259,12 @@ HOOK_DEFINE_TRAMPOLINE(EndRecoveryHook) {
             if (p != nullptr && owner == p && coop::gBubbleBusy[i] > 60) {
                 coop::gBubbleBusy[i] = 60;
                 COOP_LOG("Bubble: P%d landed", i + 1);
+                al::LiveActor* other = i == 0 ? coop::gP2 : coop::gP1;
+                if (gBubbleInto2D[i] && other != nullptr && coop::GameIsPlayer2DEarly(other)) {
+                    coop::echo::Copy2D(other, p);
+                    COOP_LOG("Bubble: P%d joins P%d in the 2D section", i + 1, 2 - i);
+                }
+                gBubbleInto2D[i] = false;
             }
         }
     }
@@ -3700,7 +3734,10 @@ static void Update() {
     }
     if (gTimer > 0 && --gTimer == 0 && gLeader >= 0) {
         s32 f = 1 - gLeader;
-        if (now[f] && !now[gLeader]) PlaceBeside(PlayerAt(f), PlayerAt(gLeader), "left 2D together");
+        if (now[f] && !now[gLeader]) {
+            coop::echo::Copy2D(PlayerAt(gLeader), PlayerAt(f));
+            PlaceBeside(PlayerAt(f), PlayerAt(gLeader), "left 2D together");
+        }
         gLeader = -1;
     }
     gWas2D[0] = now[0];
