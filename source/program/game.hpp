@@ -479,6 +479,10 @@ constexpr ptrdiff_t ShoppingWatcherStateWear_demoRet = 0x316cf0;
 // HackCap::sendMsgStartHack(HitSensor* target): Cappy asks the target to be captured
 constexpr ptrdiff_t HackCap_sendMsgStartHack = 0x3fc09c;
 constexpr u64 HackCap_sendMsgStartHack_bytes = 0xa9014ff4f81d0ff5ULL;
+constexpr ptrdiff_t HackCap_attackSensor = 0x4076fc;
+constexpr u64 HackCap_attackSensor_bytes = 0xfd000be8d10183ffULL;
+constexpr ptrdiff_t HackCap_attackSpin = 0x3fbb10;
+constexpr u64 HackCap_attackSpin_bytes = 0xf90007f9fc1b0fe8ULL;
 // Outfits from the 1.1-1.4 updates, added to the 1.0.0 shop list (romfs ItemList) for Luigi only.
 constexpr ptrdiff_t rs_isHaveCloth = 0x54c498;  // (GameDataHolderAccessor, const char*)
 constexpr u64 rs_isHaveCloth_bytes = 0xf9437c02f9401000ULL;

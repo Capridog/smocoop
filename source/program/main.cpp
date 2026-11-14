@@ -1123,6 +1123,30 @@ HOOK_DEFINE_TRAMPOLINE(CapStartHackHook) {
     }
 };
 
+// Earlier still: the cap's touch on an enemy the other brother is capturing (attackSensor /
+// attackSpin are where HackCap::prepareLockOn starts the lock-on, Ghidra 0x5076fc / 0x4fbb10).
+// Ignoring the touch lets the cap fly on instead of sitting on the enemy first.
+static bool TouchesOthersCapture(al::LiveActor* cap, al::HitSensor* other) {
+    if (coop::gP1 == nullptr || coop::gP2 == nullptr || other == nullptr) return false;
+    al::LiveActor* owner = coop::Field<al::LiveActor*>(cap, smo100::HackCap_player);
+    al::LiveActor* bro = owner == coop::gP1 ? coop::gP2 : owner == coop::gP2 ? coop::gP1 : nullptr;
+    if (bro == nullptr) return false;
+    al::LiveActor* hack = coop::HackActorOf(bro);
+    return hack != nullptr && AlGetSensorHost(other) == hack;
+}
+HOOK_DEFINE_TRAMPOLINE(CapAttackSensorHook) {
+    static void Callback(al::LiveActor* cap, al::HitSensor* self, al::HitSensor* other) {
+        if (TouchesOthersCapture(cap, other)) return;
+        Orig(cap, self, other);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(CapAttackSpinHook) {
+    static void Callback(al::LiveActor* cap, al::HitSensor* self, al::HitSensor* other, float f) {
+        if (TouchesOthersCapture(cap, other)) return;
+        Orig(cap, self, other, f);
+    }
+};
+
 // ------------------------------------------------------------------------ Luigi-only outfits
 // The update outfits (Satellaview, Sunshine, Racer, Broodals, Santa, ...) are appended to the
 // 1.0.0 shop list (romfs SystemData/ItemList). Only Luigi gets them: Mario's closet treats them
@@ -3735,7 +3759,6 @@ static void Update() {
     if (gTimer > 0 && --gTimer == 0 && gLeader >= 0) {
         s32 f = 1 - gLeader;
         if (now[f] && !now[gLeader]) {
-            coop::echo::Copy2D(PlayerAt(gLeader), PlayerAt(f));
             PlaceBeside(PlayerAt(f), PlayerAt(gLeader), "left 2D together");
         }
         gLeader = -1;
@@ -3943,6 +3966,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(rs_requestStartDemoNormalTalk, rs_requestStartDemoTalk_bytes) &&
               CheckBytes(rs_requestStartDemoWithPlayer, rs_requestStartDemoWithPlayer_bytes) &&
               CheckBytes(HackCap_sendMsgStartHack, HackCap_sendMsgStartHack_bytes) &&
+              CheckBytes(HackCap_attackSensor, HackCap_attackSensor_bytes) &&
+              CheckBytes(HackCap_attackSpin, HackCap_attackSpin_bytes) &&
               CheckBytes(rs_isHaveCloth, rs_isHaveCloth_bytes) &&
               CheckBytes(rs_isHaveCap, rs_isHaveCap_bytes) &&
               CheckBytes(ShopStateInShop_appear, ShopStateInShop_appear_bytes) &&
@@ -4060,6 +4085,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     NpcDemoNormalHook::InstallAtOffset(rs_requestStartDemoNormalTalk);
     DemoWithPlayerHook::InstallAtOffset(rs_requestStartDemoWithPlayer);
     CapStartHackHook::InstallAtOffset(HackCap_sendMsgStartHack);
+    CapAttackSensorHook::InstallAtOffset(HackCap_attackSensor);
+    CapAttackSpinHook::InstallAtOffset(HackCap_attackSpin);
     ShopAppearHook::InstallAtOffset(ShopStateInShop_appear);
     ShopLoadTextureHook::InstallAtOffset(ShopLayoutInfo_loadTexture);
     CreateTextureInfoHook::InstallAtOffset(al_createTextureInfo_path);
