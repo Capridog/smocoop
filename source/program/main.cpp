@@ -746,7 +746,13 @@ HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
                 if (isBody) body = name;
                 if (isCap) cap = name;
             }
-            // Luigi's icon for this entry (the green-capped icons of the Luigi pack).
+            bool owned = std::strcmp(name, "Mario") == 0 ||
+                         (isBody && GameIsHaveCloth(acc, name)) ||
+                         (isCap && GameIsHaveCap(acc, name));
+            if (!owned) continue;
+            // Luigi's icon, only for what his closet list can show (owned entries): every
+            // TextureInfo takes a slot from a fixed texture descriptor pool (eui::RegisterSlotForTexture),
+            // and a Luigi copy of all ~110 icons exhausted it on entering the Odyssey.
             if (isBody) gLuigiSlots[i].clothTex = GameCreateTextureInfo(kLuigiIcons, "TextureClothes", name);
             if (isCap) {
                 char capName[96];
@@ -754,16 +760,11 @@ HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
                 if (ln + 4 < sizeof(capName)) {
                     std::memcpy(capName, name, ln);
                     std::memcpy(capName + ln, "Cap", 4);
-                    // "Mario" itself uses "Mario" for both lists (vanilla: "%sCap" except Mario)
                     gLuigiSlots[i].capTex = GameCreateTextureInfo(kLuigiIcons, "TextureClothes", capName);
                     if (gLuigiSlots[i].capTex == nullptr)
                         gLuigiSlots[i].capTex = GameCreateTextureInfo(kLuigiIcons, "TextureClothes", name);
                 }
             }
-            bool owned = std::strcmp(name, "Mario") == 0 ||
-                         (isBody && GameIsHaveCloth(acc, name)) ||
-                         (isCap && GameIsHaveCap(acc, name));
-            if (!owned) continue;
             if (SceneHeapFree() < kMinFreeHeap) { skipped++; continue; }
             COOP_LOG("Wardrobe: building Luigi preview %d '%s'", i, name);
             void* actor = operator new(0x108);
@@ -1061,7 +1062,13 @@ static void FilterShop(u8* info, bool luigi) {
 // Crazy Cap icons: ShopLayoutInfo::loadTexture (Ghidra 0x307e00) loads one TextureInfo per item
 // at stage init into ShopLayoutInfo +0x48 (count +0x58). While it runs, every clothes icon is
 // also loaded from Luigi's P2Luigi_TextureClothes, and the pairs are swapped in per counter visit.
-struct TexPair { void* mario; void* luigi; };
+struct TexPair { void* mario; void* luigi; char tex[48]; };
+static void CopyTex(char* d, const char* t) {
+    size_t n = t ? std::strlen(t) : 0;
+    if (n >= 48) n = 47;
+    if (n) std::memcpy(d, t, n);
+    d[n] = 0;
+}
 static TexPair gTex[512];
 static s32 gTexN = 0;
 static bool gInShopLoad = false;
@@ -1074,7 +1081,20 @@ static void SwapShopIcons(u8* info, bool luigi) {
     if (tex == nullptr) return;
     for (s32 i = 0; i < n; i++) {
         for (s32 k = 0; k < gTexN; k++) {
-            if (luigi && tex[i] == gTex[k].mario) { tex[i] = gTex[k].luigi; break; }
+            if (luigi && tex[i] == gTex[k].mario) {
+                if (gTex[k].luigi == nullptr && gTex[k].tex[0] != 0) {
+                    // mid-frame: allocate from the scene heap (the current heap can be null/full)
+                    sead::Heap* heap = al::getSceneHeap();
+                    if (heap != nullptr) {
+                        sead::Heap* prev = HeapMgrSetCurrentHeap(nullptr, heap);
+                        gTex[k].luigi = GameCreateTextureInfo("ObjectData/P2Luigi/P2Luigi_TextureClothes",
+                                                              "TextureClothes", gTex[k].tex);
+                        HeapMgrSetCurrentHeap(nullptr, prev);
+                    }
+                }
+                if (gTex[k].luigi != nullptr) tex[i] = gTex[k].luigi;
+                break;
+            }
             if (!luigi && tex[i] == gTex[k].luigi) { tex[i] = gTex[k].mario; break; }
         }
     }
@@ -1093,8 +1113,12 @@ HOOK_DEFINE_TRAMPOLINE(CreateTextureInfoHook) {
         using namespace coop::extra;
         if (gInShopLoad && r != nullptr && gTexN < 512 && path != nullptr &&
             std::strcmp(path, "ObjectData/TextureClothes") == 0) {
-            void* l = Orig("ObjectData/P2Luigi/P2Luigi_TextureClothes", bfres, tex);
-            if (l != nullptr) gTex[gTexN++] = {r, l};
+            // Remember the icon; Luigi's copy is made only when he visits a counter (texture
+            // descriptor slots are a fixed pool).
+            gTex[gTexN].mario = r;
+            gTex[gTexN].luigi = nullptr;
+            CopyTex(gTex[gTexN].tex, tex);
+            gTexN++;
         }
         return r;
     }
