@@ -503,4 +503,8 @@ constexpr ptrdiff_t al_ActorExecuteInfo_addDrawer = 0x891c18;
 constexpr u64 al_ActorExecuteInfo_addDrawer_bytes = 0x8b080c08b9803008ULL;
 constexpr ptrdiff_t al_ActorExecuteInfo_addUpdater = 0x891bfc;
 constexpr u64 al_ActorExecuteInfo_addUpdater_bytes = 0x8b080c08b9800808ULL;
+// al::ExecuteTableHolderDraw::init(const char*, const ExecuteSystemInitInfo&, const ExecuteOrder*, int):
+// every draw list (actor and model) takes its capacity from ExecuteOrder +0x10 (stride 0x20).
+constexpr ptrdiff_t al_ExecuteTableHolderDraw_init = 0x892240;
+constexpr u64 al_ExecuteTableHolderDraw_init_bytes = 0xa90167faa9ba6ffcULL;
 }  // namespace smo100

@@ -1186,9 +1186,28 @@ HOOK_DEFINE_TRAMPOLINE(AddUpdaterHook) {
 HOOK_DEFINE_TRAMPOLINE(ExecuteListCtorHook) {
     static void Callback(void* self, const char* name, s32 capacity) { Orig(self, name, capacity + 128); }
 };
-HOOK_DEFINE_TRAMPOLINE(ModelDrawListCtorHook) {
-    static void Callback(void* self, const char* name, s32 capacity, const void* info) {
-        Orig(self, name, capacity + 128, info);
+// The ExecutorListActorModelDraw* constructors inline their base, so the model-draw lists are
+// enlarged at the source instead: a copy of the ExecuteOrder table with every count +128.
+struct OrderCopy { const u8* src; s32 n; u8 buf[0x20 * 512]; };
+static OrderCopy gOrderCopies[6];
+HOOK_DEFINE_TRAMPOLINE(DrawTableInitHook) {
+    static void Callback(void* self, const char* name, const void* info, const u8* orders, s32 n) {
+        if (orders == nullptr || n <= 0 || n > 512) return Orig(self, name, info, orders, n);
+        OrderCopy* c = nullptr;
+        for (auto& o : gOrderCopies) if (o.src == orders && o.n == n) { c = &o; break; }
+        if (c == nullptr) {
+            for (auto& o : gOrderCopies) if (o.src == nullptr) { c = &o; break; }
+            if (c == nullptr) return Orig(self, name, info, orders, n);
+            c->src = orders;
+            c->n = n;
+            std::memcpy(c->buf, orders, 0x20 * n);
+            for (s32 i = 0; i < n; i++) {
+                s32* cnt = reinterpret_cast<s32*>(c->buf + i * 0x20 + 0x10);
+                if (*cnt > 0) *cnt += 128;
+            }
+            COOP_LOG("Draw table %s: %d lists, +128 room each", name ? name : "?", n);
+        }
+        Orig(self, name, info, c->buf, n);
     }
 };
 
@@ -3772,7 +3791,7 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_ExecutorListActorExecuteBase_ctor, al_ExecutorListActorExecuteBase_ctor_bytes) &&
               CheckBytes(al_ActorExecuteInfo_addDrawer, al_ActorExecuteInfo_addDrawer_bytes) &&
               CheckBytes(al_ActorExecuteInfo_addUpdater, al_ActorExecuteInfo_addUpdater_bytes) &&
-              CheckBytes(al_ExecutorListActorModelDrawBase_ctor, al_ExecutorListActorModelDrawBase_ctor_bytes) &&
+              CheckBytes(al_ExecuteTableHolderDraw_init, al_ExecuteTableHolderDraw_init_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
@@ -3886,7 +3905,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     ExecuteListCtorHook::InstallAtOffset(al_ExecutorListActorExecuteBase_ctor);
     AddDrawerHook::InstallAtOffset(al_ActorExecuteInfo_addDrawer);
     AddUpdaterHook::InstallAtOffset(al_ActorExecuteInfo_addUpdater);
-    ModelDrawListCtorHook::InstallAtOffset(al_ExecutorListActorModelDrawBase_ctor);
+    DrawTableInitHook::InstallAtOffset(al_ExecuteTableHolderDraw_init);
     IsHaveClothHook::InstallAtOffset(rs_isHaveCloth);
     IsHaveCapHook::InstallAtOffset(rs_isHaveCap);
     DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);
