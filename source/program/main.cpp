@@ -835,6 +835,8 @@ HOOK_DEFINE_TRAMPOLINE(TryLockTalkDemoHook) {
 // Captures (HackStart), Luigi's conversations and the wardrobe keep their own handling.
 extern void RsHideDemoPlayer(const al::LiveActor*) asm("_ZN2rs14hideDemoPlayerEPKN2al9LiveActorE");
 extern void RsShowDemoPlayer(const al::LiveActor*) asm("_ZN2rs14showDemoPlayerEPKN2al9LiveActorE");
+extern bool HackCapIsHide(const al::LiveActor*) asm("_ZNK7HackCap6isHideEv");
+extern void RsForcePutOnDemoCap(const al::LiveActor*) asm("_ZN2rs17forcePutOnDemoCapEPKN2al9LiveActorE");
 namespace coop::cut {
 static al::LiveActor* gHidden = nullptr;
 static bool gRideRequest = false;  // Odyssey take-off / kingdom arrival being requested
@@ -844,17 +846,27 @@ static void Reset() { gHidden = nullptr; gRideRequest = false; gRide = false; gN
 }  // namespace coop::cut
 HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
     static bool Callback(void* dir, const char* name, s32 type) {
+        uintptr_t from = reinterpret_cast<uintptr_t>(__builtin_return_address(0)) - exl::util::modules::GetTargetStart();
+        COOP_LOG("Scene start: type %d from main+0x%lx%s", type, (unsigned long)from, coop::cut::gRideRequest ? " (Odyssey)" : "");
         bool capture = coop::gHackDemoStarter != nullptr;
         bool r = Orig(dir, name, type);
+        if (r && type >= 3 && coop::gP2 != nullptr && coop::gP2Cap != nullptr && coop::P2HackActor() == nullptr &&
+            !HackCapIsHide(coop::gP2Cap)) {
+            // Luigi's Cappy is out (e.g. still spinning on the Odyssey globe that started this scene):
+            // put it back on his head the way bosses do for Mario at scene start.
+            RsForcePutOnDemoCap(coop::gP2);
+            COOP_LOG("Cutscene: Luigi's cap put back on");
+        }
         if (!r || capture || type < 3 || type == 9 || coop::gTalkP2 || coop::gClosetP2) return r;
-        // NPC scenes (talking, cut-scene talks, moon hand-overs): both brothers stay in view.
-        if (coop::cut::gNpcDemo > 0) { COOP_LOG("NPC scene %s: both stay visible", name ? name : "?"); return r; }
-        if (coop::gP1 == nullptr || coop::gP2 == nullptr || coop::cut::gHidden != nullptr) return r;
-        if (coop::cut::gRideRequest && !al::isDead(coop::gP2) && coop::gBubbleBusy[1] <= 60) {
+        if (coop::cut::gRideRequest && coop::gP1 != nullptr && coop::gP2 != nullptr && !coop::cut::gRide &&
+            coop::cut::gHidden == nullptr && !al::isDead(coop::gP2) && coop::gBubbleBusy[1] <= 60) {
             coop::cut::gRide = true;  // Luigi stays visible and mirrors Mario (see coop::ride)
             COOP_LOG("Cutscene %s: Luigi rides along", name ? name : "?");
             return r;
         }
+        // NPC scenes (talking, cut-scene talks, moon hand-overs): both brothers stay in view.
+        if (coop::cut::gNpcDemo > 0) { COOP_LOG("NPC scene %s: both stay visible", name ? name : "?"); return r; }
+        if (coop::gP1 == nullptr || coop::gP2 == nullptr || coop::cut::gHidden != nullptr) return r;
         bool p2Leads = coop::gLeadP2 || coop::boss::RaceWinnerIsP2();
         al::LiveActor* other = p2Leads ? coop::gP1 : coop::gP2;
         s32 slot = other == coop::gP1 ? 0 : 1;
@@ -865,21 +877,27 @@ HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
         return r;
     }
 };
+// Hooked at al::DemoDirector::requestEndDemo so the Odyssey's own end paths
+// (requestEndDemoAppearFromHome / ReturnToHome, which skip ProjectDemoDirector::requestEndDemo) end too.
 HOOK_DEFINE_TRAMPOLINE(DemoEndHook) {
-    static u64 Callback(void* dir, const char* name, s32 type) {
-        u64 ret = Orig(dir, name, type);
+    static void Callback(void* dir, const char* name) {
+        Orig(dir, name);
+        COOP_LOG("Scene end%s%s", coop::cut::gRide ? " (Luigi was riding)" : "", coop::cut::gHidden ? " (showing hidden brother)" : "");
         if (coop::cut::gRide) {
             coop::cut::gRide = false;
-            if (coop::gP1 != nullptr && coop::gP2 != nullptr) coop::PlaceBeside(coop::gP2, coop::gP1, "after Odyssey scene");
+            if (coop::gP1 != nullptr && coop::gP2 != nullptr) {
+                RsShowDemoPlayer(coop::gP2);  // undo any mirrored hide (e.g. Mario hidden inside the ship)
+                coop::PlaceBeside(coop::gP2, coop::gP1, "after Odyssey scene");
+            }
         }
         al::LiveActor* h = coop::cut::gHidden;
-        if (h == nullptr) return ret;
+        if (h == nullptr) return;
         coop::cut::gHidden = nullptr;
-        if (h != coop::gP1 && h != coop::gP2) return ret;
+        if (h != coop::gP1 && h != coop::gP2) return;
         RsShowDemoPlayer(h);
         al::LiveActor* lead = h == coop::gP1 ? coop::gP2 : coop::gP1;
         if (lead != nullptr && !al::isDead(lead)) coop::PlaceBeside(h, lead, "after cutscene");
-        return ret;
+        return;
     }
 };
 
@@ -1115,6 +1133,14 @@ HOOK_DEFINE_TRAMPOLINE(DemoReturnToHomeHook) {
     static bool Callback(void* dir, const char* name) {
         coop::cut::gRideRequest = true;
         bool r = Orig(dir, name);
+        coop::cut::gRideRequest = false;
+        return r;
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(RocketStartDemoHook) {  // ShineTowerRocket::tryStartDemo (globe, take-off, moons)
+    static bool Callback(al::LiveActor* rocket) {
+        coop::cut::gRideRequest = true;
+        bool r = Orig(rocket);
         coop::cut::gRideRequest = false;
         return r;
     }
@@ -3413,7 +3439,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_SeRequest_playStart, al_SeRequest_playStart_bytes) &&
               CheckBytes(atk_Util_GetWaveFileOfWaveSound, atk_Util_GetWaveFileOfWaveSound_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemo, ProjectDemoDirector_requestStartDemo_bytes) &&
-              CheckBytes(ProjectDemoDirector_requestEndDemo, ProjectDemoDirector_requestEndDemo_bytes) &&
+              CheckBytes(al_DemoDirector_requestEndDemo, al_DemoDirector_requestEndDemo_bytes) &&
+              CheckBytes(ShineTowerRocket_tryStartDemo, ShineTowerRocket_tryStartDemo_bytes) &&
               CheckBytes(MapObjStatePlayerHold_tryStartCarryFront, MapObjStatePlayerHold_tryStart_bytes) &&
               CheckBytes(MapObjStatePlayerHold_tryStartCarryFrontWallKeep, MapObjStatePlayerHold_tryStart_bytes) &&
               CheckBytes(MapObjStatePlayerHold_tryStartCarryUp, MapObjStatePlayerHold_tryStart_bytes) &&
@@ -3517,7 +3544,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     SeRequestPlayStartHook::InstallAtOffset(al_SeRequest_playStart);
     GetWaveFileOfWaveSoundHook::InstallAtOffset(atk_Util_GetWaveFileOfWaveSound);
     DemoStartHook::InstallAtOffset(ProjectDemoDirector_requestStartDemo);
-    DemoEndHook::InstallAtOffset(ProjectDemoDirector_requestEndDemo);
+    DemoEndHook::InstallAtOffset(al_DemoDirector_requestEndDemo);
+    RocketStartDemoHook::InstallAtOffset(ShineTowerRocket_tryStartDemo);
     CarryFrontHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryFront);
     CarryFrontWallKeepHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryFrontWallKeep);
     CarryUpHook::InstallAtOffset(MapObjStatePlayerHold_tryStartCarryUp);

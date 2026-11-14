@@ -463,4 +463,11 @@ constexpr ptrdiff_t rs_requestStartDemoWithPlayerKeepCarryTalk = 0x54fbb4;
 constexpr ptrdiff_t rs_requestStartDemoWithPlayerUseCoinTalk = 0x54fc50;
 constexpr ptrdiff_t rs_requestStartDemoNormalTalk = 0x54fcec;
 constexpr u64 rs_requestStartDemoTalk_bytes = 0xa9017bfda9be4ff4ULL;
+// Every demo end (requestEndDemo, ...AppearFromHome, ...ReturnToHome, ...ScenarioCamera,
+// ...ShineMainGet/GrandGet, ...RiseMapParts) goes through al::DemoDirector::requestEndDemo.
+constexpr ptrdiff_t al_DemoDirector_requestEndDemo = 0x9cdf58;  // (this, const char*)
+constexpr u64 al_DemoDirector_requestEndDemo_bytes = 0xa9017bfdf81e0ff3ULL;
+// The Odyssey's own scenes (globe "Head to another kingdom?", take-off, paying moons)
+constexpr ptrdiff_t ShineTowerRocket_tryStartDemo = 0x30d598;
+constexpr u64 ShineTowerRocket_tryStartDemo_bytes = 0xa9017bfda9be4ff4ULL;
 }  // namespace smo100
