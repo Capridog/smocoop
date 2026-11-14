@@ -2963,6 +2963,19 @@ static void Reset() { End("stage change"); gPup[0] = gPup[1] = nullptr; gDepth =
 static Entry* Push(void* self, s32 slot, Kind kind) {
     if (gLeader < 0 || self != gPup[gLeader] || gDepth > 0) return nullptr;
     if (gHead - gTail >= 1024) return nullptr;
+    // The 2D flags must be replayed in the same order as the calls: a pipe out of a wall switches
+    // to 3D *before* setting the exit pose, and a pose set while still 2D gets snapped to the wall
+    // (the follower came out facing backwards). So sample them before every recorded call.
+    if (kind != KFlags2D) {
+        s32 fl = ReadFlags2D(self);
+        if (fl != gLastFlags && gHead - gTail < 1023) {
+            gLastFlags = fl;
+            Entry* f = &gQ[gHead++ % 1024];
+            *f = {};
+            f->frame = gFrame; f->slot = 0xff; f->kind = KFlags2D; f->i = fl;
+            COOP_LOG("Pipe/door: leader 2D flags now %06x", fl);
+        }
+    }
     Entry* e = &gQ[gHead++ % 1024];
     *e = {};
     e->frame = gFrame; e->slot = (u16)slot; e->kind = kind;
@@ -3049,6 +3062,8 @@ static void Install(al::LiveActor* player, s32 idx) {
     gPup[idx] = pup;
 }
 
+static float gLastQuat[4] = {};
+static bool gHaveQuat = false;
 static void Replay(const Entry& e, void* fp) {
     sead::Vector3f v = {e.f[0], e.f[1], e.f[2]};
     switch (e.kind) {
@@ -3057,7 +3072,11 @@ static void Replay(const Entry& e, void* fp) {
         ((void (*)(void*))gOrig[e.slot == 2 ? 1 : e.slot])(fp);
         break;
     case KVec3: ((void (*)(void*, const sead::Vector3f&))gOrig[e.slot])(fp, v); break;
-    case KQuat: ((void (*)(void*, const float*))gOrig[e.slot])(fp, e.f); break;
+    case KQuat:
+        ((void (*)(void*, const float*))gOrig[e.slot])(fp, e.f);
+        std::memcpy(gLastQuat, e.f, sizeof(gLastQuat));
+        gHaveQuat = true;
+        break;
     case KStr: {
         auto safe = coop::luigi::MakeSafe(e.name);
         SafeStr str = {safe.vtable, safe.str};
@@ -3066,10 +3085,15 @@ static void Replay(const Entry& e, void* fp) {
         break;
     }
     case KFloat: ((void (*)(void*, float))gOrig[e.slot])(fp, e.f[0]); break;
-    case KFlags2D:
+    case KFlags2D: {
+        s32 before = ReadFlags2D(fp);
         WriteFlags2D(fp, e.i);
+        // back to 3D: the last pose may have been snapped to the wall; set it again
+        if (before >= 0 && (before & 0xff) != 0 && (e.i & 0xff) == 0 && gHaveQuat)
+            ((void (*)(void*, const float*))gOrig[4])(fp, gLastQuat);
         COOP_LOG("Pipe/door: follower 2D flags %06x", e.i);
         break;
+    }
     case KSe: {  // the pipe's own in/out sound, played again for the follower
         auto safe = coop::luigi::MakeSafe(e.name);
         if (e.strVptr) AlStartSe(reinterpret_cast<u8*>(e.strVptr) + 0x10, &safe);
