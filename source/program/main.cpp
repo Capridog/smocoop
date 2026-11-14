@@ -718,7 +718,9 @@ static bool IsUpdateOutfit(const char* n) {
     for (const char* x : k) if (std::strcmp(x, n) == 0) return true;
     return false;
 }
+constexpr bool kTrimUpdateOutfits = false;  // texture pool doubled; set true to leave them out again
 static void TrimUpdateOutfits(u8* state) {
+    if (!kTrimUpdateOutfits) return;
     s32 n = coop::Field<s32>(state, 0x1a8);
     u8* arr = coop::Field<u8*>(state, 0x1a0);
     if (arr == nullptr || n <= 0) return;
@@ -1211,6 +1213,18 @@ HOOK_DEFINE_TRAMPOLINE(AddUpdaterHook) {
             return;
         }
         Orig(info, updater);
+    }
+};
+// The closet builds one preview model per outfit (58 with the update outfits) plus Luigi's own;
+// together with the icons they ran the texture pool out of slots (each half of the update outfits
+// alone was fine). Give the pool twice the room before the graphics system is created.
+HOOK_DEFINE_TRAMPOLINE(GraphicsNvnCtorHook) {
+    static void Callback(void* self, u8* arg) {
+        s32& count = *reinterpret_cast<s32*>(arg + 8);
+        s32 before = count;
+        if (count > 0 && count < 0x40000) count *= 2;
+        Orig(self, arg);
+        COOP_LOG("Texture pool: %d -> %d descriptors", before, count);
     }
 };
 HOOK_DEFINE_TRAMPOLINE(ExecuteListCtorHook) {
@@ -3831,6 +3845,7 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_ActorExecuteInfo_addDrawer, al_ActorExecuteInfo_addDrawer_bytes) &&
               CheckBytes(al_ActorExecuteInfo_addUpdater, al_ActorExecuteInfo_addUpdater_bytes) &&
               CheckBytes(al_ExecuteTableHolderDraw_init, al_ExecuteTableHolderDraw_init_bytes) &&
+              CheckBytes(sead_GraphicsNvn_ctor, sead_GraphicsNvn_ctor_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
@@ -3945,6 +3960,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     AddDrawerHook::InstallAtOffset(al_ActorExecuteInfo_addDrawer);
     AddUpdaterHook::InstallAtOffset(al_ActorExecuteInfo_addUpdater);
     DrawTableInitHook::InstallAtOffset(al_ExecuteTableHolderDraw_init);
+    GraphicsNvnCtorHook::InstallAtOffset(sead_GraphicsNvn_ctor);
     IsHaveClothHook::InstallAtOffset(rs_isHaveCloth);
     IsHaveCapHook::InstallAtOffset(rs_isHaveCap);
     DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);

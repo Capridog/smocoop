@@ -507,4 +507,9 @@ constexpr u64 al_ActorExecuteInfo_addUpdater_bytes = 0x8b080c08b9800808ULL;
 // every draw list (actor and model) takes its capacity from ExecuteOrder +0x10 (stride 0x20).
 constexpr ptrdiff_t al_ExecuteTableHolderDraw_init = 0x892240;
 constexpr u64 al_ExecuteTableHolderDraw_init_bytes = 0xa90167faa9ba6ffcULL;
+// sead::GraphicsNvn::GraphicsNvn(const CreateArg&): CreateArg +8 = NVN texture pool size. agl's
+// NVNMgr::initialize keeps (size - reserved) rounded DOWN to a power of two as the texture slots
+// every model/layout texture is registered into (Ghidra 0x83ab30 / 0x875f24).
+constexpr ptrdiff_t sead_GraphicsNvn_ctor = 0x73ab30;
+constexpr u64 sead_GraphicsNvn_ctor_bytes = 0xa9017bfda9be4ff4ULL;
 }  // namespace smo100
