@@ -2809,6 +2809,13 @@ static void BeginDown(s32 i, const char* why) {
 extern bool AlIsNerve(const void*, const al::Nerve*) asm("_ZN2al7isNerveEPKNS_9IUseNerveEPKNS_5NerveE");
 extern bool PlayerTriggerIsOnCollision(const void*, u32) asm("_ZNK13PlayerTrigger4isOnENS_17ECollisionTriggerE");
 namespace coop {
+// Straight into the player's Damage nerve (ダメージ, Ghidra 0x1e789b0): with isPlayerDeadStatus true,
+// PlayerStateDamageLife::appear goes to its Dead nerve and exeDead plays Dead / DeadPoison.
+// (Poison doesn't come through PlayerDamageKeeper::damage, so the damage flag alone did nothing.)
+static void ForceDeathNerve(al::LiveActor* p) {
+    auto* nrv = reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() + 0x1d789b0);
+    al::setNerve(reinterpret_cast<al::IUseNerve*>(p), nrv);
+}
 // Pits (death areas) and quicksand keep their own fall / sink; anything else (poison goop, ...)
 // gets the game's death animation (PlayerStateDamageLife::exeDead picks DeadPoison on poison).
 static bool KeepsFalling(al::LiveActor* p) {
@@ -2824,13 +2831,10 @@ static void GoDown(s32 i, const char* why) {
     if (KeepsFalling(p)) { BeginDown(i, why); return; }
     COOP_LOG("P%d: not a fall (poison or similar): death animation", i + 1);
     if (gDying[i] > 0 || gDown[i] > 0) return;
-    if (void* keeper = Field<void*>(p, smo100::PlayerActorHakoniwa_damageKeeper)) {
-        SetField<u8>(keeper, 0x10, 1);
-        SetField<s32>(keeper, 0x14, 0);
-    }
     if (i == 0) GameDataFunction::recoveryPlayerMax(p);
     else { gP2Hp = kP2MaxHp; if (void* k = Field<void*>(p, smo100::PlayerActorHakoniwa_damageKeeper)) SetField<s32>(k, 0x24, gP2Hp); }
     StartDying(i, why);
+    if (gDying[i] > 0) ForceDeathNerve(p);
 }
 static s32 IdxOfKeeper(void* keeper) {
     al::LiveActor* a = keeper ? Field<al::LiveActor*>(keeper, 0x0) : nullptr;
@@ -3580,11 +3584,8 @@ HOOK_DEFINE_TRAMPOLINE(PressedHook) {
         if (coop::gDying[idx] > 0 || coop::gDown[idx] > 0) return false;
         if (coop::PartnerAvailable(idx)) {
             // the game's damage state plays the death animation while isPlayerDeadStatus is true
-            if (void* keeper = coop::Field<void*>(coop::PlayerAt(idx), smo100::PlayerActorHakoniwa_damageKeeper)) {
-                coop::SetField<u8>(keeper, 0x10, 1);
-                coop::SetField<s32>(keeper, 0x14, 0);
-            }
             coop::StartDying(idx, "crushed");
+            coop::ForceDeathNerve(coop::PlayerAt(idx));
             return false;
         }
         if (idx == 1) {
