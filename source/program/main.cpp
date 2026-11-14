@@ -839,13 +839,16 @@ namespace coop::cut {
 static al::LiveActor* gHidden = nullptr;
 static bool gRideRequest = false;  // Odyssey take-off / kingdom arrival being requested
 static bool gRide = false;         // ...and running: Luigi rides along beside Mario
-static void Reset() { gHidden = nullptr; gRideRequest = false; gRide = false; }
+static s32 gNpcDemo = 0;           // inside an NPC event scene request (rs::requestStartDemo*Talk)
+static void Reset() { gHidden = nullptr; gRideRequest = false; gRide = false; gNpcDemo = 0; }
 }  // namespace coop::cut
 HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
     static bool Callback(void* dir, const char* name, s32 type) {
         bool capture = coop::gHackDemoStarter != nullptr;
         bool r = Orig(dir, name, type);
         if (!r || capture || type < 3 || type == 9 || coop::gTalkP2 || coop::gClosetP2) return r;
+        // NPC scenes (talking, cut-scene talks, moon hand-overs): both brothers stay in view.
+        if (coop::cut::gNpcDemo > 0) { COOP_LOG("NPC scene %s: both stay visible", name ? name : "?"); return r; }
         if (coop::gP1 == nullptr || coop::gP2 == nullptr || coop::cut::gHidden != nullptr) return r;
         if (coop::cut::gRideRequest && !al::isDead(coop::gP2) && coop::gBubbleBusy[1] <= 60) {
             coop::cut::gRide = true;  // Luigi stays visible and mirrors Mario (see coop::ride)
@@ -879,6 +882,24 @@ HOOK_DEFINE_TRAMPOLINE(DemoEndHook) {
         return ret;
     }
 };
+
+// NPC event scenes: EventDemoCtrl::tryStartTalkDemo / CutSceneDemo / KeepBindDemo / ... and
+// StageSceneStateTalk::exeGetShine all start through these rs helpers (Ghidra 0x2b0610 etc.).
+#define NPC_DEMO_HOOK(NAME)                                       \
+    HOOK_DEFINE_TRAMPOLINE(NAME) {                                \
+        static bool Callback(al::LiveActor* actor, bool flag) {   \
+            coop::cut::gNpcDemo++;                                \
+            bool r = Orig(actor, flag);                           \
+            coop::cut::gNpcDemo--;                                \
+            return r;                                             \
+        }                                                         \
+    };
+NPC_DEMO_HOOK(NpcDemoKeepBindHook)
+NPC_DEMO_HOOK(NpcDemoKeepHackHook)
+NPC_DEMO_HOOK(NpcDemoCinemaHook)
+NPC_DEMO_HOOK(NpcDemoKeepCarryHook)
+NPC_DEMO_HOOK(NpcDemoUseCoinHook)
+NPC_DEMO_HOOK(NpcDemoNormalHook)
 
 // RC car (Metro Kingdom): driving it is a capture of the RC man; StageScene::exeDemoHackStart and
 // StageSceneStateRadicon::exeRadicon switch to / keep the RC view only while
@@ -3400,6 +3421,12 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(rs_isPlayerHackRadiconNpc, rs_isPlayerHackRadiconNpc_bytes) &&
               CheckBytes(CheckpointFlag_init, CheckpointFlag_init_bytes) &&
               CheckBytes(CheckpointFlag_receiveMsg, CheckpointFlag_receiveMsg_bytes) &&
+              CheckBytes(rs_requestStartDemoWithPlayerKeepBindTalk, rs_requestStartDemoTalk_bytes) &&
+              CheckBytes(rs_requestStartDemoKeepHackTalk, rs_requestStartDemoTalk_bytes) &&
+              CheckBytes(rs_requestStartDemoWithPlayerCinemaFrameTalk, rs_requestStartDemoTalk_bytes) &&
+              CheckBytes(rs_requestStartDemoWithPlayerKeepCarryTalk, rs_requestStartDemoTalk_bytes) &&
+              CheckBytes(rs_requestStartDemoWithPlayerUseCoinTalk, rs_requestStartDemoTalk_bytes) &&
+              CheckBytes(rs_requestStartDemoNormalTalk, rs_requestStartDemoTalk_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
@@ -3498,6 +3525,12 @@ extern "C" void exl_main(void* x0, void* x1) {
     IsPlayerHackRadiconHook::InstallAtOffset(rs_isPlayerHackRadiconNpc);
     CheckpointFlagInitHook::InstallAtOffset(CheckpointFlag_init);
     CheckpointFlagReceiveMsgHook::InstallAtOffset(CheckpointFlag_receiveMsg);
+    NpcDemoKeepBindHook::InstallAtOffset(rs_requestStartDemoWithPlayerKeepBindTalk);
+    NpcDemoKeepHackHook::InstallAtOffset(rs_requestStartDemoKeepHackTalk);
+    NpcDemoCinemaHook::InstallAtOffset(rs_requestStartDemoWithPlayerCinemaFrameTalk);
+    NpcDemoKeepCarryHook::InstallAtOffset(rs_requestStartDemoWithPlayerKeepCarryTalk);
+    NpcDemoUseCoinHook::InstallAtOffset(rs_requestStartDemoWithPlayerUseCoinTalk);
+    NpcDemoNormalHook::InstallAtOffset(rs_requestStartDemoNormalTalk);
     DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);
     DemoAppearFromHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoAppearFromHome);
     StartActionDemoPlayerHook::InstallAtOffset(rs_startActionDemoPlayer);

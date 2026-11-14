@@ -455,4 +455,12 @@ constexpr u64 alPlayerFunction_registerPlayer_bytes = 0xa9017bfda9be4ff4ULL;
 constexpr u64 StageScene_control_bytes = 0xa9035ff8d101c3ffULL;
 constexpr u64 al_getPlayerActor_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr u64 al_tryGetPlayerActor_bytes = 0xa9017bfdf81e0ff3ULL;
+// NPC event scenes (EventDemoCtrl::tryStart*Demo) all go through these rs helpers
+constexpr ptrdiff_t rs_requestStartDemoWithPlayerKeepBindTalk = 0x54f9e0;
+constexpr ptrdiff_t rs_requestStartDemoKeepHackTalk = 0x54fa7c;
+constexpr ptrdiff_t rs_requestStartDemoWithPlayerCinemaFrameTalk = 0x54fb18;
+constexpr ptrdiff_t rs_requestStartDemoWithPlayerKeepCarryTalk = 0x54fbb4;
+constexpr ptrdiff_t rs_requestStartDemoWithPlayerUseCoinTalk = 0x54fc50;
+constexpr ptrdiff_t rs_requestStartDemoNormalTalk = 0x54fcec;
+constexpr u64 rs_requestStartDemoTalk_bytes = 0xa9017bfda9be4ff4ULL;
 }  // namespace smo100
