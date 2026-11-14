@@ -988,7 +988,11 @@ static Pair* PairOf(const al::LiveActor* f) {
     for (s32 i = 0; i < gPairN; i++) if (gPairs[i].flag == f) return &gPairs[i];
     return nullptr;
 }
+// Off for now: building the twin during stage load is the prime suspect for the black screen
+// when loading in 2P (it was never reached before the hook-pool fix). Ownership is still tracked.
+constexpr bool kFlagTwins = false;
 static void CreateTwin(al::LiveActor* flag, const void* info) {
+    if (!kFlagTwins) return;
     // Flags can be placed before the players; build the twin whenever 2P mode is on.
     if (gPairN >= 64 || !coop::CoopModeOn(reinterpret_cast<const u8*>(flag) + 0x20)) return;
     LoadKeys();
