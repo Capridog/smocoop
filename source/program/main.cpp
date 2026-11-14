@@ -2750,36 +2750,13 @@ HOOK_DEFINE_TRAMPOLINE(SafetyPointValidHook) {
     }
 };
 
-extern bool AlTryEmitEffect(void* keeper, const char* name, const sead::Vector3f* pos) asm(
-    "_ZN2al13tryEmitEffectEPNS_16IUseEffectKeeperEPKcPKN4sead7Vector3IfEE");
-extern void AlTryDeleteEffect(void* keeper, const char* name) asm(
-    "_ZN2al15tryDeleteEffectEPNS_16IUseEffectKeeperEPKc");
-struct AlColor4f { float r, g, b, a; };  // sead::Color4f layout
-extern void AlSetEffectParticleColor(void* keeper, const char* name, const AlColor4f& c) asm(
-    "_ZN2al22setEffectParticleColorEPNS_16IUseEffectKeeperEPKcRKN4sead7Color4fE");
-extern void AlSetEffectFollowPosPtr(void* keeper, const char* name, const sead::Vector3f* pos) asm(
-    "_ZN2al21setEffectFollowPosPtrEPNS_16IUseEffectKeeperEPKcPKN4sead7Vector3IfEE");
-
 // --------------------------------------------------------- pipes & doors: follow with animation
 // The pipe/door moves the brother who entered purely through IUsePlayerPuppet virtual calls. Both
 // brothers' puppets get a copy of the vtable whose mutating slots record the call. While a brother
 // travels through an in-stage pipe or door, every call is replayed on the other brother's puppet
 // 25 frames later, so he walks in, travels and pops out right behind with the same animation.
 namespace coop::echo {
-constexpr s32 kDelay = 25;  // minimum replay delay
-// 3D World: the brother left behind turns into a ball of light in his colour that flies into the
-// pipe/door after the one who went in, and pops out of the other end behind him. The light is the
-// player's own capture-dive trail and star glow (PlayerHitReactionHakoniwa effect list:
-// PossessTrace / Invincible; the player actor is its own effect keeper at +8, see
-// PlayerEffect::tryEmitInvincibleEffect 0x43fb54).
-static s32 gDelay = kDelay;
-static s32 gFlight = 0;            // frames the light takes to reach the pipe
-static sead::Vector3f gOrbFrom = {}, gOrbTo = {}, gOrbPos = {};
-static bool gOrbHidden = false;    // follower's body hidden while he is a light
-static bool gOrbFx = false;        // light effects running
-static bool gSawHide = false;      // leader hid himself (replayed): wait for his show
-static bool gHaveLastTrans = false;
-static sead::Vector3f gLastTrans = {};
+constexpr s32 kDelay = 25;
 constexpr s32 kSlots = 38;
 enum Kind : u8 { K0, KVec3, KQuat, KStr, KFloat, KVec3Int, KFlags2D };
 struct Entry { u32 frame; u16 slot; Kind kind; float f[4]; s32 i; const char* str; void* strVptr; };
@@ -2816,46 +2793,11 @@ static void WriteFlags2D(void* pup, s32 flags) {
     coop::SetField<u8>(dim, 0xb, (u8)((flags >> 8) & 0xff));
     coop::SetField<u8>(pup, 0xae, (u8)((flags >> 16) & 0xff));
 }
-static void* Keeper(al::LiveActor* a) { return reinterpret_cast<u8*>(a) + 8; }
-static void OrbFxOff(al::LiveActor* who) {
-    if (!gOrbFx || who == nullptr) return;
-    AlTryDeleteEffect(Keeper(who), "PossessTrace");
-    AlTryDeleteEffect(Keeper(who), "Invincible");
-    gOrbFx = false;
-}
-static void OrbFxOn(al::LiveActor* who, s32 idx) {
-    if (who == nullptr) return;
-    void* k = Keeper(who);
-    AlColor4f c = idx == 1 ? AlColor4f{0.25f, 1.0f, 0.3f, 1.0f}   // Luigi green
-                           : AlColor4f{1.0f, 0.25f, 0.2f, 1.0f};  // Mario red
-    if (AlTryEmitEffect(k, "PossessTrace", &gOrbPos)) {
-        AlSetEffectFollowPosPtr(k, "PossessTrace", &gOrbPos);
-        AlSetEffectParticleColor(k, "PossessTrace", c);
-    }
-    if (AlTryEmitEffect(k, "Invincible", &gOrbPos)) {
-        AlSetEffectFollowPosPtr(k, "Invincible", &gOrbPos);
-        AlSetEffectParticleColor(k, "Invincible", c);
-    }
-    gOrbFx = true;
-}
-static void Unhide(void* fp, const char* why) {
-    if (!gOrbHidden || fp == nullptr) return;
-    gOrbHidden = false;
-    ((void (*)(void*))gOrig[18])(fp);  // show
-    ((void (*)(void*))gOrig[23])(fp);  // showShadow
-    COOP_LOG("Pipe/door: follower visible again (%s)", why);
-}
 static bool IsBinding(void* pup) {
     return coop::Field<void*>(pup, 0x70) != nullptr && coop::Field<void*>(pup, 0x78) != nullptr;
 }
 static void End(const char* why) {
-    if (gLeader >= 0) {
-        COOP_LOG("Pipe/door follow ended (%s)", why);
-        al::LiveActor* f = coop::PlayerAt(1 - gLeader);
-        OrbFxOff(f);
-        Unhide(gPup[1 - gLeader], "follow ended");
-    }
-    gOrbHidden = false; gOrbFx = false;
+    if (gLeader >= 0) COOP_LOG("Pipe/door follow ended (%s)", why);
     gLeader = -1; gHead = gTail = 0; gStartReq = false; gFollowerStarted = false;
     coop::gIgnoreJumps = 10;
 }
@@ -2911,19 +2853,7 @@ static void TStart(void* self, al::HitSensor* binder, al::HitSensor* player) {
     gLeader = idx; gStart = gFrame; gHead = gTail = 0;
     gFollowerStarted = false; gStartReq = false;
     gLastFlags = ReadFlags2D(self);
-    // the follower freezes right away (Bind) and flies to the pipe as a light
-    gStartReq = true;
-    gOrbTo = al::getTrans(coop::PlayerAt(idx));
-    gOrbFrom = al::getTrans(coop::PlayerAt(1 - idx));
-    float dx = gOrbTo.x - gOrbFrom.x, dy = gOrbTo.y - gOrbFrom.y, dz = gOrbTo.z - gOrbFrom.z;
-    float dist = __builtin_sqrtf(dx * dx + dy * dy + dz * dz);
-    gFlight = (s32)(dist / 70.0f);
-    if (gFlight < 12) gFlight = 12;
-    if (gFlight > 32) gFlight = 32;
-    gDelay = gFlight + 6 > kDelay ? gFlight + 6 : kDelay;
-    gOrbHidden = false; gOrbFx = false; gSawHide = false; gHaveLastTrans = false;
-    COOP_LOG("Pipe/door: P%d went in, P%d flies after him as a light (%d frames, %.0f away)", idx + 1,
-             2 - idx, gFlight, dist);
+    COOP_LOG("Pipe/door: P%d went in, P%d follows %d frames behind", idx + 1, 2 - idx, kDelay);
 }
 
 static void Install(al::LiveActor* player, s32 idx) {
@@ -2958,27 +2888,6 @@ static void Install(al::LiveActor* player, s32 idx) {
 
 static void Replay(const Entry& e, void* fp) {
     sead::Vector3f v = {e.f[0], e.f[1], e.f[2]};
-    if (gOrbHidden) {
-        // The light stays a light until the leader comes out at the other end: his "show"
-        // after a "hide", or (if he never hid) the jump to the exit.
-        if (e.slot == 17 || e.slot == 22) { gSawHide = true; return; }
-        if (e.slot == 18 || e.slot == 23) {
-            if (gSawHide) Unhide(fp, "leader came out");
-            return;
-        }
-        if (e.kind == KVec3 && (e.slot == 3 || e.slot == 6)) {
-            if (!gSawHide && gHaveLastTrans) {
-                float x = v.x - gLastTrans.x, y = v.y - gLastTrans.y, z = v.z - gLastTrans.z;
-                if (x * x + y * y + z * z > 500.0f * 500.0f) {
-                    ((void (*)(void*, const sead::Vector3f&))gOrig[e.slot])(fp, v);
-                    Unhide(fp, "leader reached the exit");
-                    gLastTrans = v;
-                    return;
-                }
-            }
-            gLastTrans = v; gHaveLastTrans = true;
-        }
-    }
     switch (e.kind) {
     case K0:
         // a cancel on the leader ends the follower's bind properly (end = BindEnd msg + cancel)
@@ -3044,38 +2953,12 @@ static void Update() {
         }
     }
     if (!gFollowerStarted) {
-        if (gFrame - gStart > 10) End("follower never froze");  // TryStartFollower didn't run
+        if (gFrame - gStart >= (u32)kDelay) gStartReq = true;
         return;
     }
     void* fp = gPup[1 - gLeader];
     if (!IsBinding(fp)) { End("follower left the bind"); return; }
-    {
-        s32 t = (s32)(gFrame - gStart);
-        if (t <= gFlight) {
-            al::LiveActor* f = coop::PlayerAt(1 - gLeader);
-            if (!gOrbHidden) {
-                gOrbHidden = true;
-                ((void (*)(void*))gOrig[17])(fp);  // hide
-                ((void (*)(void*))gOrig[22])(fp);  // hideShadow
-            }
-            float u = (float)t / (float)gFlight;
-            float e = u * u * (3.0f - 2.0f * u);  // ease in/out
-            float arc = 4.0f * u * (1.0f - u) * 250.0f;
-            sead::Vector3f p = {gOrbFrom.x + (gOrbTo.x - gOrbFrom.x) * e,
-                                gOrbFrom.y + (gOrbTo.y - gOrbFrom.y) * e + arc,
-                                gOrbFrom.z + (gOrbTo.z - gOrbFrom.z) * e};
-            gOrbPos = {p.x, p.y + 70.0f, p.z};  // body height
-            if (t == 0 || !gOrbFx) OrbFxOn(f, 1 - gLeader);
-            ((void (*)(void*, const sead::Vector3f&))gOrig[3])(fp, p);  // setTrans
-            sead::Vector3f zero = {0.0f, 0.0f, 0.0f};
-            ((void (*)(void*, const sead::Vector3f&))gOrig[5])(fp, zero);  // setVelocity
-            if (t == gFlight) {
-                OrbFxOff(f);
-                COOP_LOG("Pipe/door: P%d's light reached the pipe", 2 - gLeader);
-            }
-        }
-    }
-    while (gTail != gHead && gQ[gTail % 1024].frame + (u32)gDelay <= gFrame) {
+    while (gTail != gHead && gQ[gTail % 1024].frame + kDelay <= gFrame) {
         Entry e = gQ[gTail++ % 1024];
         Replay(e, fp);
         if (e.kind == K0 && (e.slot == 1 || e.slot == 2)) { End("follower came out"); return; }
