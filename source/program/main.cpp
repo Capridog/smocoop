@@ -225,6 +225,7 @@ constexpr s32 kDeathFrames = 150;  // ~2.5 s from going down to coming back (eve
 // down, hidden where he went under, for the same time before his bubble.
 static s32 gDown[2] = {0, 0};
 static sead::Vector3f gDownPos[2] = {};
+constexpr s32 kFallFrames = 60;
 // gRecoveryRelease (declared above): our own calls to the recovery routine go through
 static void StartDying(s32 i, const char* why) {
     if (gDying[i] > 0 || gBubbleRequest[i] || gBubbleBusy[i] > 60) return;
@@ -232,6 +233,9 @@ static void StartDying(s32 i, const char* why) {
     gBubbleBusy[i] = 60 * 10;  // no off-screen bubble, and the brother counts as down meanwhile
     COOP_LOG("P%d down (%s): death animation, then a bubble", i + 1, why);
 }
+}  // namespace coop
+extern void RsHideDemoPlayer(const al::LiveActor*) asm("_ZN2rs14hideDemoPlayerEPKN2al9LiveActorE");
+namespace coop {
 static void UpdateDying() {
     for (s32 i = 0; i < 2; i++) {
         if (gDying[i] <= 0) continue;
@@ -246,8 +250,14 @@ static void UpdateDying() {
         if (gDown[i] <= 0) continue;
         al::LiveActor* p = PlayerAt(i);
         if (gGameOver || p == nullptr) { gDown[i] = 0; continue; }
-        al::setVelocityZero(p);
-        al::resetPosition(p, gDownPos[i]);
+        // first he keeps falling (sinking) for a second, then he is gone until the bubble
+        if (gDown[i] < kFallFrames) {
+            gDownPos[i] = al::getTrans(p);
+        } else {
+            if (gDown[i] == kFallFrames) RsHideDemoPlayer(p);
+            al::setVelocityZero(p);
+            al::resetPosition(p, gDownPos[i]);
+        }
         if (++gDown[i] >= kDeathFrames) {
             gDown[i] = 0;
             gBubbleBusy[i] = 0;
@@ -2784,8 +2794,37 @@ static void BeginDown(s32 i, const char* why) {
     gDownPos[i] = al::getTrans(p);
     gBubbleBusy[i] = 60 * 10;
     gForcedRecovery[i] = 60 * 10;
-    RsHideDemoPlayer(p);
-    COOP_LOG("P%d down (%s): back in a bubble in a moment", i + 1, why);
+    // A fall is a death (3D World): he comes back with full hearts.
+    if (i == 0) {
+        GameDataFunction::recoveryPlayerMax(p);
+    } else {
+        gP2Hp = kP2MaxHp;
+        if (void* k = Field<void*>(p, smo100::PlayerActorHakoniwa_damageKeeper)) SetField<s32>(k, 0x24, gP2Hp);
+    }
+    COOP_LOG("P%d down (%s): falls out of sight, back in a bubble in a moment", i + 1, why);
+}
+}  // namespace coop
+extern bool AlIsNerve(const void*, const al::Nerve*) asm("_ZN2al7isNerveEPKNS_9IUseNerveEPKNS_5NerveE");
+namespace coop {
+// Pits (death areas) and quicksand keep their own fall / sink; anything else (poison goop, ...)
+// gets the game's death animation (PlayerStateDamageLife::exeDead picks DeadPoison on poison).
+static bool KeepsFalling(al::LiveActor* p) {
+    if (al::isInDeathArea(p)) return true;
+    auto* sink = reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() + 0x1d78990);
+    return AlIsNerve(p, sink);
+}
+static void GoDown(s32 i, const char* why) {
+    al::LiveActor* p = PlayerAt(i);
+    if (p == nullptr) return;
+    if (KeepsFalling(p)) { BeginDown(i, why); return; }
+    if (gDying[i] > 0 || gDown[i] > 0) return;
+    if (void* keeper = Field<void*>(p, smo100::PlayerActorHakoniwa_damageKeeper)) {
+        SetField<u8>(keeper, 0x10, 1);
+        SetField<s32>(keeper, 0x14, 0);
+    }
+    if (i == 0) GameDataFunction::recoveryPlayerMax(p);
+    else { gP2Hp = kP2MaxHp; if (void* k = Field<void*>(p, smo100::PlayerActorHakoniwa_damageKeeper)) SetField<s32>(k, 0x24, gP2Hp); }
+    StartDying(i, why);
 }
 static s32 IdxOfKeeper(void* keeper) {
     al::LiveActor* a = keeper ? Field<al::LiveActor*>(keeper, 0x0) : nullptr;
@@ -2800,7 +2839,7 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryRoutineHook) {
         s32 idx = who == coop::gP1 ? 0 : (who == coop::gP2 ? 1 : -1);
         if (!coop::gRecoveryRelease && idx >= 0 && coop::gP1 != nullptr && coop::gP2 != nullptr && !coop::gGameOver) {
             if (coop::gDown[idx] > 0) return;
-            if (coop::PartnerAvailable(idx)) { coop::BeginDown(idx, "fell"); return; }
+            if (coop::PartnerAvailable(idx)) { coop::GoDown(idx, "fell or touched poison"); return; }
         }
         Orig(who, a, b, c, d, e);
     }
@@ -2818,8 +2857,12 @@ HOOK_DEFINE_TRAMPOLINE(DamageForceHook) {
 HOOK_DEFINE_TRAMPOLINE(DeadHook) {
     static void Callback(void* keeper) {
         if (s32 k = coop::IdxOfKeeper(keeper); k >= 0 && (coop::gDown[k] > 0 || coop::gDying[k] > 0)) return;
+        if (coop::IdxOfKeeper(keeper) == 0 && !coop::gGameOver && coop::gP2 != nullptr && coop::PartnerAvailable(0)) {
+            coop::GoDown(0, "would have died");
+            return;
+        }
         if (!IsP2Keeper(keeper)) return Orig(keeper);
-        if (coop::PartnerAvailable(1)) coop::BeginDown(1, "would have died");
+        if (coop::PartnerAvailable(1)) coop::GoDown(1, "would have died");
         else coop::RequestGameOver("P2 died while P1 in a bubble");
     }
 };
