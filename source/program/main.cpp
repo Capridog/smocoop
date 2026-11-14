@@ -725,7 +725,7 @@ static bool IsUpdateOutfit(const char* n) {
     for (const char* x : k) if (std::strcmp(x, n) == 0) return true;
     return false;
 }
-constexpr bool kTrimUpdateOutfits = false;  // texture pool doubled; set true to leave them out again
+constexpr bool kTrimUpdateOutfits = true;  // all 14 in the closet still crash the Odyssey (not textures, not list sizes)
 static void TrimUpdateOutfits(u8* state) {
     if (!kTrimUpdateOutfits) return;
     s32 n = coop::Field<s32>(state, 0x1a8);
@@ -3861,7 +3861,6 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_ActorExecuteInfo_addDrawer, al_ActorExecuteInfo_addDrawer_bytes) &&
               CheckBytes(al_ActorExecuteInfo_addUpdater, al_ActorExecuteInfo_addUpdater_bytes) &&
               CheckBytes(al_ExecuteTableHolderDraw_init, al_ExecuteTableHolderDraw_init_bytes) &&
-              CheckBytes(sead_GraphicsNvn_ctor, sead_GraphicsNvn_ctor_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
@@ -3976,7 +3975,6 @@ extern "C" void exl_main(void* x0, void* x1) {
     AddDrawerHook::InstallAtOffset(al_ActorExecuteInfo_addDrawer);
     AddUpdaterHook::InstallAtOffset(al_ActorExecuteInfo_addUpdater);
     DrawTableInitHook::InstallAtOffset(al_ExecuteTableHolderDraw_init);
-    GraphicsNvnCtorHook::InstallAtOffset(sead_GraphicsNvn_ctor);
     IsHaveClothHook::InstallAtOffset(rs_isHaveCloth);
     IsHaveCapHook::InstallAtOffset(rs_isHaveCap);
     DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);
