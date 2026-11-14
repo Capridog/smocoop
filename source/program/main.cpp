@@ -17,6 +17,7 @@
 
 #define COOP_LOG(...) Logging.Log("[OdysseyCoop] " __VA_ARGS__)
 
+extern sead::Heap* HeapMgrSetCurrentHeap(void*, sead::Heap*) asm("_ZN4sead7HeapMgr15setCurrentHeap_EPNS_4HeapE");
 namespace coop {
 static bool gInStageSceneInit = false;  // only spawn P2 while StageScene::init runs
 static bool gSpawningP2 = false;        // re-entrancy guard
@@ -988,21 +989,31 @@ static Pair* PairOf(const al::LiveActor* f) {
     for (s32 i = 0; i < gPairN; i++) if (gPairs[i].flag == f) return &gPairs[i];
     return nullptr;
 }
-// Off for now: building the twin during stage load is the prime suspect for the black screen
-// when loading in 2P (it was never reached before the hook-pool fix). Ownership is still tracked.
-constexpr bool kFlagTwins = false;
+// Built the way the game builds its own child model actors (e.g. BossKnuckleCounterGround::init):
+// operator new(0x108) from the scene heap, al::LiveActor::LiveActor, then
+// al::initChildActorWithArchiveNameNoPlacementInfo. The first version used
+// initActorWithArchiveName with the flag's own placement info, which gave a black screen in 2P.
+extern void AlInitChildActorNoPlacement(al::LiveActor*, const void*, const coop::luigi::SafeStr&, const char*) asm(
+    "_ZN2al44initChildActorWithArchiveNameNoPlacementInfoEPNS_9LiveActorERKNS_13ActorInitInfoERKN4sead14SafeStringBaseIcEEPKc");
+extern void AlShowModelIfHide(al::LiveActor*) asm("_ZN2al15showModelIfHideEPNS_9LiveActorE");
 static void CreateTwin(al::LiveActor* flag, const void* info) {
-    if (!kFlagTwins) return;
     // Flags can be placed before the players; build the twin whenever 2P mode is on.
     if (gPairN >= 64 || !coop::CoopModeOn(reinterpret_cast<const u8*>(flag) + 0x20)) return;
     LoadKeys();
-    void* mem = operator new(0x200);
-    std::memset(mem, 0, 0x200);
-    LiveActorCtor(mem, "P2LuigiCheckpointFlag");
+    sead::Heap* heap = al::getSceneHeap();
+    if (heap == nullptr) return;
+    sead::Heap* prev = HeapMgrSetCurrentHeap(nullptr, heap);
+    void* mem = operator new(0x108);
+    if (mem != nullptr) {
+        LiveActorCtor(mem, "P2LuigiCheckpointFlag");
+        coop::luigi::gLuigiFlagInit = true;
+        AlInitChildActorNoPlacement(static_cast<al::LiveActor*>(mem), info,
+                                    coop::luigi::MakeSafe("CheckpointFlag"), nullptr);
+        coop::luigi::gLuigiFlagInit = false;
+    }
+    HeapMgrSetCurrentHeap(nullptr, prev);
+    if (mem == nullptr) return;
     auto* twin = static_cast<al::LiveActor*>(mem);
-    coop::luigi::gLuigiFlagInit = true;
-    AlInitActorWithArchiveName(twin, info, coop::luigi::MakeSafe("CheckpointFlag"), nullptr);
-    coop::luigi::gLuigiFlagInit = false;
     LiveActorMakeDead(twin);
     gPairs[gPairN++] = {flag, twin, Find(KeyOf(flag)) >= 0};
 }
@@ -1018,7 +1029,12 @@ static void SetOwner(al::LiveActor* flag, bool luigi) {
 static void Update() {
     for (s32 i = 0; i < gPairN; i++) {
         Pair& p = gPairs[i];
-        if (!p.luigi || p.twin == nullptr) continue;
+        if (p.twin == nullptr) continue;
+        if (!p.luigi) {
+            // Mario took it back: drop the green twin and show the normal flag again.
+            if (!al::isDead(p.twin)) { LiveActorMakeDead(p.twin); if (!al::isDead(p.flag)) AlShowModelIfHide(p.flag); }
+            continue;
+        }
         if (al::isDead(p.flag)) { if (!al::isDead(p.twin)) LiveActorMakeDead(p.twin); continue; }
         if (al::isDead(p.twin)) LiveActorMakeAlive(p.twin);
         AlCopyPose(p.twin, p.flag);
@@ -1575,7 +1591,6 @@ extern void GameMessageHolderInit(void*, const char*, const char*) asm(
 extern const char16_t* GameMessageHolderTryGetText(const void*, const char*) asm(
     "_ZNK2al13MessageHolder10tryGetTextEPKc");
 extern const char* GameLanguageString() asm("_ZN2al17getLanguageStringEv");
-extern sead::Heap* HeapMgrSetCurrentHeap(void*, sead::Heap*) asm("_ZN4sead7HeapMgr15setCurrentHeap_EPNS_4HeapE");
 namespace coop::text {
 struct Entry { char name[64]; void* holder; };
 static Entry gStage[96];
