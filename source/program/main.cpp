@@ -706,9 +706,39 @@ extern void* GameCreateTextureInfo(const char* path, const char* bfres, const ch
     "_ZN2al17createTextureInfoEPKcS1_S1_");
 static constexpr const char kLuigiIcons[] = "ObjectData/P2Luigi/P2Luigi_TextureClothes";
 
+// The 14 update outfits are appended to the end of the closet's entry list. Building their
+// closet previews (Mario's 1.4 models) leads to a crash on entering the Odyssey, so for now the
+// closet stops before them: they can be bought and worn from the Crazy Cap counters.
+static bool IsUpdateOutfit(const char* n) {
+    static const char* const k[] = {"MarioBandman", "MarioSunshine", "MarioArmorWestern", "MarioSatellite",
+                                    "MarioBatter",  "MarioTopper",   "MarioRacer",        "MarioRango",
+                                    "MarioHariet",  "MarioSpewart",  "MarioConductor",    "MarioZombie",
+                                    "MarioSanta",   "MarioDot3d"};
+    if (n == nullptr) return false;
+    for (const char* x : k) if (std::strcmp(x, n) == 0) return true;
+    return false;
+}
+static void TrimUpdateOutfits(u8* state) {
+    s32 n = coop::Field<s32>(state, 0x1a8);
+    u8* arr = coop::Field<u8*>(state, 0x1a0);
+    if (arr == nullptr || n <= 0) return;
+    s32 first = n;
+    for (s32 i = 0; i < n; i++)
+        if (IsUpdateOutfit(coop::Field<const char*>(arr + i * coop::closet::kEntryStride, 0x8))) { first = i; break; }
+    for (s32 i = first; i < n; i++)
+        if (!IsUpdateOutfit(coop::Field<const char*>(arr + i * coop::closet::kEntryStride, 0x8))) {
+            COOP_LOG("Wardrobe: update outfits not at the end (entry %d), closet left as is", i);
+            return;
+        }
+    if (first < n) {
+        coop::SetField<s32>(state, 0x1a8, first);
+        COOP_LOG("Wardrobe: %d update outfits left out of the closet (%d -> %d entries)", n - first, n, first);
+    }
+}
 HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
     static void Callback(u8* state, const al::ActorInitInfo& info) {
         using namespace coop::closet;
+        TrimUpdateOutfits(state);
         Orig(state, info);
         gState = state;
         gLuigiSlots = nullptr;
