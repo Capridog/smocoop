@@ -2883,6 +2883,9 @@ HOOK_DEFINE_TRAMPOLINE(SafetyPointValidHook) {
     }
 };
 
+extern bool AlStartSe(void* audioKeeper, const void* name) asm(
+    "_ZN2al7startSeEPKNS_15IUseAudioKeeperERKN4sead14SafeStringBaseIcEE");
+
 // --------------------------------------------------------- pipes & doors: follow with animation
 // The pipe/door moves the brother who entered purely through IUsePlayerPuppet virtual calls. Both
 // brothers' puppets get a copy of the vtable whose mutating slots record the call. While a brother
@@ -2891,8 +2894,8 @@ HOOK_DEFINE_TRAMPOLINE(SafetyPointValidHook) {
 namespace coop::echo {
 constexpr s32 kDelay = 25;
 constexpr s32 kSlots = 38;
-enum Kind : u8 { K0, KVec3, KQuat, KStr, KFloat, KVec3Int, KFlags2D };
-struct Entry { u32 frame; u16 slot; Kind kind; float f[4]; s32 i; const char* str; void* strVptr; };
+enum Kind : u8 { K0, KVec3, KQuat, KStr, KFloat, KVec3Int, KFlags2D, KSe };
+struct Entry { u32 frame; u16 slot; Kind kind; float f[4]; s32 i; const char* str; void* strVptr; char name[64]; };
 struct SafeStr { void* vptr; const char* str; };
 static Entry gQ[1024];
 static u32 gHead = 0, gTail = 0;
@@ -2934,6 +2937,19 @@ static void Copy2D(al::LiveActor* from, al::LiveActor* to) {
     s32 f = ReadFlags2D(a);
     if (f >= 0) WriteFlags2D(b, f);
 }
+// Pipe sounds: DokanPuppetController (+0x18 puppet, +0x20 entry pipe, +0x28 exit pipe) plays
+// "PgIn" / "PgDirectIn" on the entry pipe and "PgOut" on the exit pipe (Ghidra 0x35c3a4 / 0x35c504 /
+// 0x35c7b8). For the leader's moves, queue the same sound for the follower.
+static void QueueSe(void* ctrl, ptrdiff_t pipeOff, const char* name) {
+    if (gLeader < 0 || ctrl == nullptr || coop::Field<void*>(ctrl, 0x18) != gPup[gLeader]) return;
+    void* pipe = coop::Field<void*>(ctrl, pipeOff);
+    if (pipe == nullptr) return;
+    if (gHead - gTail >= 1024) return;
+    Entry* e = &gQ[gHead++ % 1024];
+    *e = {};
+    e->frame = gFrame; e->slot = 0xfe; e->kind = KSe; e->strVptr = pipe;
+    std::strncpy(e->name, name, sizeof(e->name) - 1);
+}
 static bool IsBinding(void* pup) {
     return coop::Field<void*>(pup, 0x70) != nullptr && coop::Field<void*>(pup, 0x78) != nullptr;
 }
@@ -2966,7 +2982,13 @@ template <int S> static void TQ(void* self, const float* q) {
     gDepth++; ((void (*)(void*, const float*))gOrig[S])(self, q); gDepth--;
 }
 template <int S> static void TStr(void* self, const SafeStr& str) {
-    if (Entry* e = Push(self, S, KStr)) { e->str = str.str; e->strVptr = str.vptr; }
+    // copy the name: callers may build it in a stack buffer that is gone 25 frames later
+    if (Entry* e = Push(self, S, KStr)) {
+        e->strVptr = str.vptr;
+        std::strncpy(e->name, str.str ? str.str : "", sizeof(e->name) - 1);
+        e->name[sizeof(e->name) - 1] = 0;
+        e->str = e->name;
+    }
     gDepth++; ((void (*)(void*, const SafeStr&))gOrig[S])(self, str); gDepth--;
 }
 template <int S> static void TF(void* self, float f) {
@@ -3037,12 +3059,22 @@ static void Replay(const Entry& e, void* fp) {
     case KVec3: ((void (*)(void*, const sead::Vector3f&))gOrig[e.slot])(fp, v); break;
     case KQuat: ((void (*)(void*, const float*))gOrig[e.slot])(fp, e.f); break;
     case KStr: {
-        SafeStr str = {e.strVptr, e.str};
+        auto safe = coop::luigi::MakeSafe(e.name);
+        SafeStr str = {safe.vtable, safe.str};
+        COOP_LOG("Pipe/door: follower action %s", e.name);
         ((void (*)(void*, const SafeStr&))gOrig[e.slot])(fp, str);
         break;
     }
     case KFloat: ((void (*)(void*, float))gOrig[e.slot])(fp, e.f[0]); break;
-    case KFlags2D: WriteFlags2D(fp, e.i); break;
+    case KFlags2D:
+        WriteFlags2D(fp, e.i);
+        COOP_LOG("Pipe/door: follower 2D flags %06x", e.i);
+        break;
+    case KSe: {  // the pipe's own in/out sound, played again for the follower
+        auto safe = coop::luigi::MakeSafe(e.name);
+        if (e.strVptr) AlStartSe(reinterpret_cast<u8*>(e.strVptr) + 0x10, &safe);
+        break;
+    }
     case KVec3Int: ((void (*)(void*, const sead::Vector3f&, s32))gOrig[e.slot])(fp, v, e.i); break;
     }
 }
@@ -3106,6 +3138,18 @@ static void Update() {
     }
 }
 }  // namespace coop::echo
+
+#define DOKAN_SE_HOOK(NAME, OFF, NAMESTR)                                                 \
+    HOOK_DEFINE_TRAMPOLINE(NAME) {                                                         \
+        static void Callback(void* ctrl) {                                                 \
+            bool first = al::isFirstStep(reinterpret_cast<al::IUseNerve*>(ctrl));          \
+            Orig(ctrl);                                                                    \
+            if (first) coop::echo::QueueSe(ctrl, OFF, NAMESTR);                            \
+        }                                                                                  \
+    };
+DOKAN_SE_HOOK(DokanInSeHook, 0x20, "PgIn")
+DOKAN_SE_HOOK(DokanDirectInSeHook, 0x20, "PgDirectIn")
+DOKAN_SE_HOOK(DokanOutSeHook, 0x28, "PgOut")
 
 // Vanilla pipes only ever bind player 0 (rs::requestBindPlayer -> getPlayerActor(pipe, 0)). While
 // a pipe handles a touch from P2, "player 0" means P2, so P2 can enter pipes too.
@@ -4152,7 +4196,9 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(HackCap_sendMsgStartHack, HackCap_sendMsgStartHack_bytes) &&
               CheckBytes(HackCap_attackSensor, HackCap_attackSensor_bytes) &&
               CheckBytes(PlayerFunction_isPlayerDeadStatus, PlayerFunction_isPlayerDeadStatus_bytes) &&
-              CheckBytes(PlayerRecoveryStart, PlayerRecoveryStart_bytes) &&
+              CheckBytes(DokanPuppetController_exeIn, DokanPuppetController_exeIn_bytes) &&
+              CheckBytes(DokanPuppetController_exeDirectIn, DokanPuppetController_exeDirectIn_bytes) &&
+              CheckBytes(DokanPuppetController_exeOut, DokanPuppetController_exeOut_bytes) &&
               CheckBytes(StageSceneStateMiss_checkMiss, StageSceneStateMiss_checkMiss_bytes) &&
               CheckBytes(HackCap_attackSpin, HackCap_attackSpin_bytes) &&
               CheckBytes(rs_isHaveCloth, rs_isHaveCloth_bytes) &&
@@ -4274,6 +4320,9 @@ extern "C" void exl_main(void* x0, void* x1) {
     CapStartHackHook::InstallAtOffset(HackCap_sendMsgStartHack);
     DeadStatusHook::InstallAtOffset(PlayerFunction_isPlayerDeadStatus);
     RecoveryRoutineHook::InstallAtOffset(PlayerRecoveryStart);
+    DokanInSeHook::InstallAtOffset(DokanPuppetController_exeIn);
+    DokanDirectInSeHook::InstallAtOffset(DokanPuppetController_exeDirectIn);
+    DokanOutSeHook::InstallAtOffset(DokanPuppetController_exeOut);
     CheckMissHook::InstallAtOffset(StageSceneStateMiss_checkMiss);
     CapAttackSensorHook::InstallAtOffset(HackCap_attackSensor);
     CapAttackSpinHook::InstallAtOffset(HackCap_attackSpin);

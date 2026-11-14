@@ -479,6 +479,12 @@ constexpr ptrdiff_t ShoppingWatcherStateWear_demoRet = 0x316cf0;
 // HackCap::sendMsgStartHack(HitSensor* target): Cappy asks the target to be captured
 constexpr ptrdiff_t HackCap_sendMsgStartHack = 0x3fc09c;
 constexpr u64 HackCap_sendMsgStartHack_bytes = 0xa9014ff4f81d0ff5ULL;
+constexpr ptrdiff_t DokanPuppetController_exeIn = 0x25c3a4;
+constexpr u64 DokanPuppetController_exeIn_bytes = 0xf9000bf3d100c3ffULL;
+constexpr ptrdiff_t DokanPuppetController_exeDirectIn = 0x25c504;
+constexpr u64 DokanPuppetController_exeDirectIn_bytes = 0xfd001be8d10143ffULL;
+constexpr ptrdiff_t DokanPuppetController_exeOut = 0x25c7b8;
+constexpr u64 DokanPuppetController_exeOut_bytes = 0xf90023f5d101c3ffULL;
 constexpr ptrdiff_t PlayerFunction_isPlayerDeadStatus = 0x447c18;
 constexpr u64 PlayerFunction_isPlayerDeadStatus_bytes = 0xa9017bfdf81e0ff3ULL;
 constexpr ptrdiff_t StageSceneStateMiss_checkMiss = 0x4e3594;
