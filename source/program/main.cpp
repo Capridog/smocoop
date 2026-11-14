@@ -213,6 +213,28 @@ static void RequestBubble(s32 i, const char* why) {
     gBubbleBusy[i] = 60 * 10;
     COOP_LOG("Bubble requested for P%d (%s)", i + 1, why);
 }
+// Death animation first (3D World): the brother plays the game's own death (PlayerStateDamageLife
+// goes to its Dead nerve when PlayerFunction::isPlayerDeadStatus is true at appear, Ghidra
+// 0x469750 / exeDead 0x469e10), then he comes back in a bubble.
+static s32 gDying[2] = {0, 0};  // frames since the fatal hit (0 = not dying)
+constexpr s32 kDeathFrames = 110;
+static void StartDying(s32 i, const char* why) {
+    if (gDying[i] > 0 || gBubbleRequest[i] || gBubbleBusy[i] > 60) return;
+    gDying[i] = 1;
+    gBubbleBusy[i] = 60 * 10;  // no off-screen bubble, and the brother counts as down meanwhile
+    COOP_LOG("P%d down (%s): death animation, then a bubble", i + 1, why);
+}
+static void UpdateDying() {
+    for (s32 i = 0; i < 2; i++) {
+        if (gDying[i] <= 0) continue;
+        if (gGameOver || PlayerAt(i) == nullptr) { gDying[i] = 0; continue; }
+        if (++gDying[i] >= kDeathFrames) {
+            gDying[i] = 0;
+            gBubbleBusy[i] = 0;
+            RequestBubble(i, "after the death animation");
+        }
+    }
+}
 static void RequestGameOver(const char* why) {
     if (gGameOver) return;
     gGameOver = true;
@@ -2694,7 +2716,7 @@ static void P2TakeHit(void* keeper, s32 damageType, bool fromRecovery) {
             COOP_LOG("P2 out of hearts during recovery; refilled to %d", coop::gP2Hp);
         } else {
             coop::gP2Hp = coop::kP2MaxHp;
-            if (coop::PartnerAvailable(1)) coop::RequestBubble(1, "out of hearts");
+            if (coop::PartnerAvailable(1)) coop::StartDying(1, "out of hearts");
             else coop::RequestGameOver("P2 out of hearts while P1 in a bubble");
         }
     }
@@ -2712,7 +2734,7 @@ static bool TrySaveP1(void* keeper, s32 damageType, const char* why, bool startB
     coop::SetField<u8>(keeper, 0x10, 1);
     coop::SetField<s32>(keeper, 0x14, damageType);
     GameDataFunction::recoveryPlayerMax(coop::gP1);
-    if (startBubble) coop::RequestBubble(0, why);  // pits/quicksand: vanilla recovery already bubbles
+    if (startBubble) coop::StartDying(0, why);  // pits/quicksand: vanilla recovery already bubbles
     else COOP_LOG("P1 on last heart in a pit: refilled, game's own bubble takes him to P2");
     return true;
 }
@@ -2749,6 +2771,19 @@ HOOK_DEFINE_TRAMPOLINE(DeadHook) {
     }
 };
 
+HOOK_DEFINE_TRAMPOLINE(DeadStatusHook) {  // PlayerFunction::isPlayerDeadStatus
+    static bool Callback(const al::LiveActor* a) {
+        if (a != nullptr && ((a == coop::gP1 && coop::gDying[0] > 0) || (a == coop::gP2 && coop::gDying[1] > 0)))
+            return true;
+        return Orig(a);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(CheckMissHook) {  // StageSceneStateMiss::checkMiss: Mario's co-op death isn't a miss
+    static bool Callback(const void* state) {
+        if (coop::gDying[0] > 0) return false;
+        return Orig(state);
+    }
+};
 HOOK_DEFINE_TRAMPOLINE(JudgeDeadHook) {
     static bool Callback(const void* judge) {
         auto* actor = coop::Field<al::LiveActor*>(judge, smo100::PlayerJudgeDead_player);
@@ -3061,7 +3096,17 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
             s32 idx = actor == coop::gP1 ? 0 : (actor == coop::gP2 ? 1 : -1);
             if (idx >= 0 && coop::gBubbleRequest[idx] && !coop::gGameOver) {
                 coop::gBubbleRequest[idx] = false;
-                coop::StartBubbleTo(actor, idx == 0 ? coop::gP2 : coop::gP1, idx);
+                al::LiveActor* to = idx == 0 ? coop::gP2 : coop::gP1;
+                if (coop::GameIsPlayer2DEarly(actor) || coop::GameIsPlayer2DEarly(to)) {
+                    // No bubbles in 8-bit wall sections: he reappears right beside his brother
+                    // (on the wall too if his brother is on it).
+                    coop::gForcedRecovery[idx] = 0;
+                    coop::gBubbleBusy[idx] = 60;
+                    if (coop::GameIsPlayer2DEarly(to)) coop::echo::Copy2D(to, actor);
+                    coop::PlaceBeside(actor, to, "2D section: no bubble");
+                    return Orig(self);
+                }
+                coop::StartBubbleTo(actor, to, idx);
                 return true;
             }
         }
@@ -3458,6 +3503,7 @@ static void Reset() {
     coop::gForcedRecovery[0] = coop::gForcedRecovery[1] = 0;
     coop::gBubbleRequest[0] = coop::gBubbleRequest[1] = false;
     coop::gBubbleBusy[0] = coop::gBubbleBusy[1] = 0;
+    coop::gDying[0] = coop::gDying[1] = 0;
 }
 // called once per frame from StageSceneControl
 static void Update() {
@@ -3838,6 +3884,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneControl) {
         if (coop::gP2 == nullptr || coop::gP1 == nullptr) return;
 
         coop::collide::Update();
+        coop::UpdateDying();
         if (coop::cut::gWatch > 0) {  // diagnostics: where is Luigi and what is he doing after an Odyssey scene
             s32 w = coop::cut::gWatch--;
             if (w % 15 == 0) {
@@ -4043,6 +4090,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(rs_requestStartDemoWithPlayer, rs_requestStartDemoWithPlayer_bytes) &&
               CheckBytes(HackCap_sendMsgStartHack, HackCap_sendMsgStartHack_bytes) &&
               CheckBytes(HackCap_attackSensor, HackCap_attackSensor_bytes) &&
+              CheckBytes(PlayerFunction_isPlayerDeadStatus, PlayerFunction_isPlayerDeadStatus_bytes) &&
+              CheckBytes(StageSceneStateMiss_checkMiss, StageSceneStateMiss_checkMiss_bytes) &&
               CheckBytes(HackCap_attackSpin, HackCap_attackSpin_bytes) &&
               CheckBytes(rs_isHaveCloth, rs_isHaveCloth_bytes) &&
               CheckBytes(rs_isHaveCap, rs_isHaveCap_bytes) &&
@@ -4161,6 +4210,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     NpcDemoNormalHook::InstallAtOffset(rs_requestStartDemoNormalTalk);
     DemoWithPlayerHook::InstallAtOffset(rs_requestStartDemoWithPlayer);
     CapStartHackHook::InstallAtOffset(HackCap_sendMsgStartHack);
+    DeadStatusHook::InstallAtOffset(PlayerFunction_isPlayerDeadStatus);
+    CheckMissHook::InstallAtOffset(StageSceneStateMiss_checkMiss);
     CapAttackSensorHook::InstallAtOffset(HackCap_attackSensor);
     CapAttackSpinHook::InstallAtOffset(HackCap_attackSpin);
     ShopAppearHook::InstallAtOffset(ShopStateInShop_appear);
