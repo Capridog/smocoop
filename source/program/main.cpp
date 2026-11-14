@@ -997,6 +997,9 @@ HOOK_DEFINE_TRAMPOLINE(CapStartHackHook) {
 // 1.0.0 shop list (romfs SystemData/ItemList). Only Luigi gets them: Mario's closet treats them
 // as not owned, and Mario's Crazy Cap counter leaves them out.
 namespace coop::extra {
+// Both brothers get the update outfits (Mario's own models + icons come from the 1.4 romfs).
+// false = Luigi only: Mario's closet and Crazy Cap counter hide them.
+constexpr bool kMarioGetsExtras = true;
 static const char* const kNames[] = {"MarioBandman", "MarioSunshine", "MarioArmorWestern", "MarioSatellite",
                                      "MarioBatter",  "MarioTopper",   "MarioRacer",        "MarioRango",
                                      "MarioHariet",  "MarioSpewart",  "MarioConductor",    "MarioZombie",
@@ -1015,7 +1018,7 @@ static void FilterShop(u8* info, bool luigi) {
     s32 full = Field<s32>(info, 0x50);
     auto** data = Field<u8**>(info, 0x48);
     if (data == nullptr || full <= 0) return;
-    if (luigi) { SetField<s32>(info, 0x40, full); return; }
+    if (luigi || kMarioGetsExtras) { SetField<s32>(info, 0x40, full); return; }
     s32 keep = 0;
     for (s32 i = 0; i < full; i++) {
         u8* item = data[i] ? Field<u8*>(data[i], 0) : nullptr;
@@ -1073,7 +1076,7 @@ HOOK_DEFINE_TRAMPOLINE(ShopAppearHook) {
             bool luigi = coop::gTalkP2;
             coop::extra::FilterShop(infos[idx], luigi);
             coop::extra::SwapShopIcons(infos[idx], luigi);
-            COOP_LOG("Shop: %s counter", luigi ? "Luigi's (all outfits)" : "Mario's (update outfits hidden)");
+            COOP_LOG("Shop: %s counter", luigi ? "Luigi's" : "Mario's");
         }
         Orig(state);
     }
@@ -1082,8 +1085,8 @@ HOOK_DEFINE_TRAMPOLINE(ShopAppearHook) {
 HOOK_DEFINE_TRAMPOLINE(IsHaveClothHook) {
     static bool Callback(u8* holder, const char* name) {
         bool r = Orig(holder, name);
-        if (r && !coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0)) &&
-            coop::extra::IsExtra(name))
+        if (!coop::extra::kMarioGetsExtras && r && !coop::gClosetP2 &&
+            coop::closet::CalledFromClosetState(__builtin_return_address(0)) && coop::extra::IsExtra(name))
             return false;  // Mario's closet: Luigi-only outfit
         return r;
     }
@@ -1091,8 +1094,8 @@ HOOK_DEFINE_TRAMPOLINE(IsHaveClothHook) {
 HOOK_DEFINE_TRAMPOLINE(IsHaveCapHook) {
     static bool Callback(u8* holder, const char* name) {
         bool r = Orig(holder, name);
-        if (r && !coop::gClosetP2 && coop::closet::CalledFromClosetState(__builtin_return_address(0)) &&
-            coop::extra::IsExtra(name))
+        if (!coop::extra::kMarioGetsExtras && r && !coop::gClosetP2 &&
+            coop::closet::CalledFromClosetState(__builtin_return_address(0)) && coop::extra::IsExtra(name))
             return false;
         return r;
     }
