@@ -1188,16 +1188,25 @@ HOOK_DEFINE_TRAMPOLINE(ExecuteListCtorHook) {
 };
 // The ExecutorListActorModelDraw* constructors inline their base, so the model-draw lists are
 // enlarged at the source instead: a copy of the ExecuteOrder table with every count +128.
-struct OrderCopy { const u8* src; s32 n; u8 buf[0x20 * 512]; };
-static OrderCopy gOrderCopies[6];
+struct OrderCopy { const u8* src; s32 n; u8* buf; };
+static OrderCopy gOrderCopies[16];
 HOOK_DEFINE_TRAMPOLINE(DrawTableInitHook) {
     static void Callback(void* self, const char* name, const void* info, const u8* orders, s32 n) {
-        if (orders == nullptr || n <= 0 || n > 512) return Orig(self, name, info, orders, n);
+        if (orders == nullptr || n <= 0 || n > 4096) {
+            COOP_LOG("Draw table %s: %d lists, left as is", name ? name : "?", n);
+            return Orig(self, name, info, orders, n);
+        }
         OrderCopy* c = nullptr;
         for (auto& o : gOrderCopies) if (o.src == orders && o.n == n) { c = &o; break; }
         if (c == nullptr) {
             for (auto& o : gOrderCopies) if (o.src == nullptr) { c = &o; break; }
             if (c == nullptr) return Orig(self, name, info, orders, n);
+            // a static-lifetime copy: the system heap, not a scene heap that is freed later
+            static u8 sPool[0x20 * 6000];
+            static size_t sUsed = 0;
+            if (sUsed + 0x20 * n > sizeof(sPool)) return Orig(self, name, info, orders, n);
+            c->buf = sPool + sUsed;
+            sUsed += 0x20 * n;
             c->src = orders;
             c->n = n;
             std::memcpy(c->buf, orders, 0x20 * n);
