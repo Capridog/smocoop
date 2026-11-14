@@ -841,8 +841,10 @@ namespace coop::cut {
 static al::LiveActor* gHidden = nullptr;
 static bool gRideRequest = false;  // Odyssey take-off / kingdom arrival being requested
 static bool gRide = false;         // ...and running: Luigi rides along beside Mario
+static bool gRocketRequest = false;  // the request comes from the Odyssey itself (globe, moons, take-off)
+static bool gRidePose = false;     // ride moves Luigi to Mario's demo pose (arrival / return); off for Odyssey scenes
 static s32 gNpcDemo = 0;           // inside an NPC event scene request (rs::requestStartDemo*Talk)
-static void Reset() { gHidden = nullptr; gRideRequest = false; gRide = false; gNpcDemo = 0; }
+static void Reset() { gHidden = nullptr; gRideRequest = false; gRide = false; gRocketRequest = false; gRidePose = false; gNpcDemo = 0; }
 }  // namespace coop::cut
 HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
     static bool Callback(void* dir, const char* name, s32 type) {
@@ -850,17 +852,14 @@ HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
         COOP_LOG("Scene start: type %d from main+0x%lx%s", type, (unsigned long)from, coop::cut::gRideRequest ? " (Odyssey)" : "");
         bool capture = coop::gHackDemoStarter != nullptr;
         bool r = Orig(dir, name, type);
-        if (r && type >= 3 && coop::gP2 != nullptr && coop::gP2Cap != nullptr && coop::P2HackActor() == nullptr &&
-            !HackCapIsHide(coop::gP2Cap)) {
-            // Luigi's Cappy is out (e.g. still spinning on the Odyssey globe that started this scene):
-            // put it back on his head the way bosses do for Mario at scene start.
-            RsForcePutOnDemoCap(coop::gP2);
-            COOP_LOG("Cutscene: Luigi's cap put back on");
-        }
         if (!r || capture || type < 3 || type == 9 || coop::gTalkP2 || coop::gClosetP2) return r;
         if (coop::cut::gRideRequest && coop::gP1 != nullptr && coop::gP2 != nullptr && !coop::cut::gRide &&
             coop::cut::gHidden == nullptr && !al::isDead(coop::gP2) && coop::gBubbleBusy[1] <= 60) {
             coop::cut::gRide = true;  // Luigi stays visible and mirrors Mario (see coop::ride)
+            // Odyssey scenes (globe, moon filling, take-off) walk Mario around the ship: Luigi stays
+            // where he stands and only vanishes/reappears with Mario (boarding); following Mario's
+            // demo pose there pushed him into / under the hull.
+            coop::cut::gRidePose = !coop::cut::gRocketRequest;
             COOP_LOG("Cutscene %s: Luigi rides along", name ? name : "?");
             return r;
         }
@@ -882,6 +881,14 @@ HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
 HOOK_DEFINE_TRAMPOLINE(DemoEndHook) {
     static void Callback(void* dir, const char* name) {
         Orig(dir, name);
+        if (coop::gP2 != nullptr && coop::gP2Cap != nullptr && coop::P2HackActor() == nullptr &&
+            !al::isDead(coop::gP2) && !HackCapIsHide(coop::gP2Cap)) {
+            // Luigi's Cappy is still out when the scene ends (e.g. left spinning on the Odyssey globe
+            // after "Head to another kingdom?"): put it back on his head. Done at the end, not the
+            // start, because the Odyssey's moon-filling scene needs the cap to stay on the globe.
+            RsForcePutOnDemoCap(coop::gP2);
+            COOP_LOG("Scene end: Luigi's cap put back on");
+        }
         COOP_LOG("Scene end%s%s", coop::cut::gRide ? " (Luigi was riding)" : "", coop::cut::gHidden ? " (showing hidden brother)" : "");
         if (coop::cut::gRide) {
             coop::cut::gRide = false;
@@ -1129,7 +1136,7 @@ extern const sead::Vector3f& RsGetDemoPlayerTrans(const al::LiveActor*) asm("_ZN
 extern const Quat4& RsGetDemoPlayerQuat(const al::LiveActor*) asm("_ZN2rs17getDemoPlayerQuatEPKN2al9LiveActorE");
 namespace coop::ride {
 static void Update() {
-    if (!coop::cut::gRide || coop::gP1 == nullptr || coop::gP2 == nullptr) return;
+    if (!coop::cut::gRide || !coop::cut::gRidePose || coop::gP1 == nullptr || coop::gP2 == nullptr) return;
     const sead::Vector3f& t = RsGetDemoPlayerTrans(coop::gP1);
     const Quat4& q = RsGetDemoPlayerQuat(coop::gP1);
     // the quat's local +X (side) axis
@@ -1140,6 +1147,7 @@ static void Update() {
     RsReplaceDemoPlayer(coop::gP2, pos, q);
 }
 static bool Mirror(const al::LiveActor* a) { return coop::cut::gRide && coop::gP2 != nullptr && a != coop::gP2; }
+static bool MirrorAction(const al::LiveActor* a) { return Mirror(a) && coop::cut::gRidePose; }
 }  // namespace coop::ride
 HOOK_DEFINE_TRAMPOLINE(DemoReturnToHomeHook) {
     static bool Callback(void* dir, const char* name) {
@@ -1152,8 +1160,10 @@ HOOK_DEFINE_TRAMPOLINE(DemoReturnToHomeHook) {
 HOOK_DEFINE_TRAMPOLINE(RocketStartDemoHook) {  // ShineTowerRocket::tryStartDemo (globe, take-off, moons)
     static bool Callback(al::LiveActor* rocket) {
         coop::cut::gRideRequest = true;
+        coop::cut::gRocketRequest = true;
         bool r = Orig(rocket);
         coop::cut::gRideRequest = false;
+        coop::cut::gRocketRequest = false;
         return r;
     }
 };
@@ -1168,19 +1178,19 @@ HOOK_DEFINE_TRAMPOLINE(DemoAppearFromHomeHook) {
 HOOK_DEFINE_TRAMPOLINE(StartActionDemoPlayerHook) {
     static void Callback(const al::LiveActor* a, const char* name) {
         Orig(a, name);
-        if (coop::ride::Mirror(a)) Orig(coop::gP2, name);
+        if (coop::ride::MirrorAction(a)) Orig(coop::gP2, name);
     }
 };
 HOOK_DEFINE_TRAMPOLINE(SetActionFrameDemoPlayerHook) {
     static void Callback(const al::LiveActor* a, float f) {
         Orig(a, f);
-        if (coop::ride::Mirror(a)) Orig(coop::gP2, f);
+        if (coop::ride::MirrorAction(a)) Orig(coop::gP2, f);
     }
 };
 HOOK_DEFINE_TRAMPOLINE(SetActionFrameRateDemoPlayerHook) {
     static void Callback(const al::LiveActor* a, float f) {
         Orig(a, f);
-        if (coop::ride::Mirror(a)) Orig(coop::gP2, f);
+        if (coop::ride::MirrorAction(a)) Orig(coop::gP2, f);
     }
 };
 HOOK_DEFINE_TRAMPOLINE(HideDemoPlayerHook) {
@@ -2970,6 +2980,12 @@ static void Update() {
 
     coop::echo::Update();
     if (coop::echo::Active()) {  // animated follow in progress: no fallback warp, no bubble
+        coop::gIgnoreJumps = 10;
+        gBubbleCooldown = 90;
+        gFarFrames = 0;
+        gWarpFollow = -1;
+    }
+    if (coop::cut::gRide) {  // Odyssey scenes move Mario's demo pose around: not a pipe/door warp
         coop::gIgnoreJumps = 10;
         gBubbleCooldown = 90;
         gFarFrames = 0;
