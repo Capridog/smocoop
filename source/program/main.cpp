@@ -2738,7 +2738,8 @@ static s32 BubbleSlot(const void* state) {
 //    flightFrames = current step), so the vanilla end puts him right there and he drops down.
 constexpr float kBubbleHover = 90.0f;      // height above the rescuer's feet
 constexpr float kBubbleSide = 150.0f;      // distance beside him
-constexpr float kBubbleTouch = 130.0f;     // rescuer within this distance pops it
+constexpr float kBubbleTouch = 130.0f;
+constexpr float kBubbleCapTouch = 170.0f;  // Cappy (spinning hat) to bubble centre     // rescuer within this distance pops it
 constexpr float kBubbleEase = 0.05f;       // fraction of the remaining way per frame
 constexpr float kBubbleMaxSpeed = 12.0f;   // units per frame near the rescuer
 constexpr float kBubbleFarSpeed = 30.0f;   // when far away (catch-up)
@@ -2823,7 +2824,17 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
         if (coop::gBubbleBusy[rescuerSlot] > 60) return;  // rescuer is in a bubble himself
         const sead::Vector3f& r = al::getTrans(rescuer);
         float dx = r.x - pos.x, dy = (r.y + 80.0f) - (pos.y + 80.0f), dz = r.z - pos.z;
-        if (dx * dx + dy * dy + dz * dz < kBubbleTouch * kBubbleTouch) {
+        // Cappy pops it too: the rescuer's thrown cap reaching the bubble (only while the bubble is
+        // close enough to him that the drop lands near where he stands).
+        bool capPop = false;
+        if (auto* cap = coop::Field<al::LiveActor*>(rescuer, 0x148); cap != nullptr && !HackCapIsHide(cap) &&
+            coop::HackActorOf(rescuer) == nullptr && dx * dx + dz * dz < 900.0f * 900.0f) {
+            const sead::Vector3f& c = al::getTrans(cap);
+            float cx = c.x - pos.x, cy = c.y - (pos.y + 80.0f), cz = c.z - pos.z;
+            capPop = cx * cx + cy * cy + cz * cz < kBubbleCapTouch * kBubbleCapTouch;
+        }
+        if (capPop || dx * dx + dy * dy + dz * dz < kBubbleTouch * kBubbleTouch) {
+            if (capPop) COOP_LOG("Bubble: hit by P%d's Cappy", rescuerSlot + 1);
             sead::Vector3f pp = pos;
             if (pp.y < r.y + 40.0f) pp.y = r.y + 40.0f;  // never pop below the rescuer's feet
             gBubblePopPos[slot] = pp;
