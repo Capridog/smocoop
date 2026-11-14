@@ -981,6 +981,7 @@ HOOK_DEFINE_TRAMPOLINE(TryLockTalkDemoHook) {
 extern void RsHideDemoPlayer(const al::LiveActor*) asm("_ZN2rs14hideDemoPlayerEPKN2al9LiveActorE");
 extern void RsShowDemoPlayer(const al::LiveActor*) asm("_ZN2rs14showDemoPlayerEPKN2al9LiveActorE");
 extern bool HackCapIsHide(const al::LiveActor*) asm("_ZNK7HackCap6isHideEv");
+extern void HackCapRequestReturn(al::LiveActor*, bool*) asm("_ZN7HackCap13requestReturnEPb");
 extern void RsForcePutOnDemoCap(const al::LiveActor*) asm("_ZN2rs17forcePutOnDemoCapEPKN2al9LiveActorE");
 namespace coop::cut {
 static al::LiveActor* gHidden = nullptr;
@@ -1096,7 +1097,10 @@ HOOK_DEFINE_TRAMPOLINE(CapStartHackHook) {
             al::LiveActor* other = owner == coop::gP1 ? coop::gP2 : owner == coop::gP2 ? coop::gP1 : nullptr;
             al::LiveActor* host = AlGetSensorHost(target);
             if (other != nullptr && host != nullptr && coop::HackActorOf(other) == host) {
-                COOP_LOG("Capture refused: P%d already has it", other == coop::gP1 ? 1 : 2);
+                // The player retries this every frame while the cap waits locked on (Ghidra
+                // 0x51fb34), so the cap would sit on the enemy. Send it back instead.
+                COOP_LOG("Capture refused: P%d already has it, cap returns", other == coop::gP1 ? 1 : 2);
+                HackCapRequestReturn(cap, nullptr);
                 return false;
             }
         }
