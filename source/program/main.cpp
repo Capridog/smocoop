@@ -1131,6 +1131,14 @@ HOOK_DEFINE_TRAMPOLINE(IsHaveCapHook) {
     }
 };
 
+// Draw lists hold one executor per distinct model name, sized from the game's ExecuteOrder table
+// and filled without a bounds check. The closet now builds 58 Mario previews (14 update outfits)
+// plus Luigi's own, which overflowed the list on entering the Odyssey. Give every draw list room
+// for 128 more model names (8 bytes each; executors are only created when used).
+HOOK_DEFINE_TRAMPOLINE(DrawListCtorHook) {
+    static void Callback(void* self, const char* name, s32 capacity) { Orig(self, name, capacity + 128); }
+};
+
 // RC car (Metro Kingdom): driving it is a capture of the RC man; StageScene::exeDemoHackStart and
 // StageSceneStateRadicon::exeRadicon switch to / keep the RC view only while
 // rs::isPlayerHackRadiconNpc(rs::getPlayerActor(scene)) (player 0) is true (Ghidra 0x4cef3c,
@@ -3708,6 +3716,7 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(ShopStateInShop_appear, ShopStateInShop_appear_bytes) &&
               CheckBytes(al_createTextureInfo_path, al_createTextureInfo_path_bytes) &&
               CheckBytes(ShopLayoutInfo_loadTexture, ShopLayoutInfo_loadTexture_bytes) &&
+              CheckBytes(al_ExecutorListActorDraw_ctor, al_ExecutorListActorDraw_ctor_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
@@ -3818,6 +3827,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     ShopAppearHook::InstallAtOffset(ShopStateInShop_appear);
     ShopLoadTextureHook::InstallAtOffset(ShopLayoutInfo_loadTexture);
     CreateTextureInfoHook::InstallAtOffset(al_createTextureInfo_path);
+    DrawListCtorHook::InstallAtOffset(al_ExecutorListActorDraw_ctor);
     IsHaveClothHook::InstallAtOffset(rs_isHaveCloth);
     IsHaveCapHook::InstallAtOffset(rs_isHaveCap);
     DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);

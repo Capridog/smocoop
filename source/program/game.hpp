@@ -490,4 +490,9 @@ constexpr ptrdiff_t al_createTextureInfo_path = 0x8b48cc;  // (const char* path,
 constexpr u64 al_createTextureInfo_path_bytes = 0xa91257fcd10543ffULL;
 constexpr ptrdiff_t ShopLayoutInfo_loadTexture = 0x207e00;
 constexpr u64 ShopLayoutInfo_loadTexture_bytes = 0xa90167faa9ba6ffcULL;
+// al::ExecutorListActorDraw::ExecutorListActorDraw(const char* name, int capacity): one draw
+// executor per distinct model name, appended with no bounds check
+// (ExecutorListActorExecuteBase::registerActor, Ghidra 0x997330).
+constexpr ptrdiff_t al_ExecutorListActorDraw_ctor = 0x893f58;
+constexpr u64 al_ExecutorListActorDraw_ctor_bytes = 0xa9017bfdf81e0ff3ULL;
 }  // namespace smo100
