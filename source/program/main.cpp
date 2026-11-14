@@ -122,15 +122,30 @@ static const al::IUseAreaObj* AreaUser(const al::LiveActor* a) {
 // Find a safe spot beside `anchor`: right, left, behind, front; each must have no wall between the
 // anchor and the spot, ground within 600 units below it, and not be inside a death area.
 // Falls back to the anchor's own position.
+extern void AlCalcFrontDir(sead::Vector3f*, const al::LiveActor*) asm(
+    "_ZN2al12calcFrontDirEPN4sead7Vector3IfEEPKNS_9LiveActorE");
+extern bool GameIsPlayer2DEarly(const al::LiveActor*) asm("_ZN2rs10isPlayer2DEPKN2al9LiveActorE");
 static sead::Vector3f FindSpotBeside(al::LiveActor* anchor) {
     const sead::Vector3f p1 = al::getTrans(anchor);
     sead::Vector3f side;
     al::calcSideDir(&side, anchor);
-    const sead::Vector3f dirs[4] = {{side.x, 0, side.z},
-                                    {-side.x, 0, -side.z},
-                                    {side.z, 0, -side.x},
-                                    {-side.z, 0, side.x}};
-    for (const auto& d : dirs) {
+    sead::Vector3f dirs[4] = {{side.x, 0, side.z},
+                              {-side.x, 0, -side.z},
+                              {side.z, 0, -side.x},
+                              {-side.z, 0, side.x}};
+    s32 count = 4;
+    // 8-bit wall sections: a spot to his side is in front of / behind the wall, off the 2D plane,
+    // where the floor isn't (falls through the stage). In 2D he faces along the wall, so only
+    // ahead / behind him keeps the same depth.
+    if (GameIsPlayer2DEarly(anchor)) {
+        sead::Vector3f front;
+        AlCalcFrontDir(&front, anchor);
+        dirs[0] = {front.x, 0, front.z};
+        dirs[1] = {-front.x, 0, -front.z};
+        count = 2;
+    }
+    for (s32 i = 0; i < count; i++) {
+        const sead::Vector3f& d = dirs[i];
         const float dist = 150.0f;
         sead::Vector3f eye = {p1.x, p1.y + 60.0f, p1.z};
         sead::Vector3f toSpot = {d.x * dist, 0.0f, d.z * dist};
