@@ -379,6 +379,13 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
             using FreeFn = size_t (*)(sead::Heap*);
             FreeFn fn = (*reinterpret_cast<FreeFn**>(heap))[15];
             COOP_LOG("Scene heap free: %lu KB", (unsigned long)(fn(heap) / 1024));
+        {
+            // agl::driver::NVNMgr::sInstance (GOT main+0x1e54188): +0x180 texture slots, +0x19c in use
+            u64 got = *reinterpret_cast<u64*>(exl::util::modules::GetTargetStart() + 0x1e54188);
+            u8* nvn = got ? *reinterpret_cast<u8**>(got) : nullptr;
+            if (nvn != nullptr)
+                COOP_LOG("Texture slots: %u in use of %u", coop::Field<u32>(nvn, 0x19c), coop::Field<u32>(nvn, 0x180));
+        }
         }
     }
 };
@@ -752,6 +759,12 @@ HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
         u8* arr = coop::Field<u8*>(state, 0x1a0);
         void* scene = coop::Field<void*>(state, 0x18);
         COOP_LOG("Wardrobe: initModel entries=%d ports p1=%d p2=%d", n, p1Port, p2Port);
+        {
+            u64 got = *reinterpret_cast<u64*>(exl::util::modules::GetTargetStart() + 0x1e54188);
+            u8* nvn = got ? *reinterpret_cast<u8**>(got) : nullptr;
+            if (nvn != nullptr)
+                COOP_LOG("Texture slots: %u in use of %u", coop::Field<u32>(nvn, 0x19c), coop::Field<u32>(nvn, 0x180));
+        }
         if (p2Port < 0 || p2Port == p1Port) return;  // no Luigi this stage
         if (n <= 0 || arr == nullptr || scene == nullptr) return;
         if (!coop::CoopModeOn(reinterpret_cast<u8*>(scene) + 0x20)) return;  // 2P mode off
@@ -1222,7 +1235,10 @@ HOOK_DEFINE_TRAMPOLINE(GraphicsNvnCtorHook) {
     static void Callback(void* self, u8* arg) {
         s32& count = *reinterpret_cast<s32*>(arg + 8);
         s32 before = count;
-        if (count > 0 && count < 0x40000) count *= 2;
+        // Doubling (33368) ran agl's startup heap out of memory. agl only uses (count - reserved)
+        // rounded down to a power of two; 512 more lifts that past the next power of two when
+        // the reserved part pushes it just below (16684 - reserved < 16384 -> only 8192 used).
+        if (count > 0 && count < 0x8000) count += 512;
         Orig(self, arg);
         COOP_LOG("Texture pool: %d -> %d descriptors", before, count);
     }
