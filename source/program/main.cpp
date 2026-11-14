@@ -918,6 +918,18 @@ NPC_DEMO_HOOK(NpcDemoCinemaHook)
 NPC_DEMO_HOOK(NpcDemoKeepCarryHook)
 NPC_DEMO_HOOK(NpcDemoUseCoinHook)
 NPC_DEMO_HOOK(NpcDemoNormalHook)
+// Wardrobe and store try-on scenes: nobody is hidden (the one changing is in the booth already; the
+// old rule hid Luigi even when he was the one changing, as the closet flag is set after the scene starts).
+HOOK_DEFINE_TRAMPOLINE(DemoWithPlayerHook) {
+    static bool Callback(al::LiveActor* actor, bool flag) {
+        uintptr_t from = reinterpret_cast<uintptr_t>(__builtin_return_address(0)) - exl::util::modules::GetTargetStart();
+        bool booth = from == smo100::Closet_receiveMsg_demoRet || from == smo100::ShoppingWatcherStateWear_demoRet;
+        if (booth) coop::cut::gNpcDemo++;
+        bool r = Orig(actor, flag);
+        if (booth) coop::cut::gNpcDemo--;
+        return r;
+    }
+};
 
 // RC car (Metro Kingdom): driving it is a capture of the RC man; StageScene::exeDemoHackStart and
 // StageSceneStateRadicon::exeRadicon switch to / keep the RC view only while
@@ -3469,6 +3481,7 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(rs_requestStartDemoWithPlayerKeepCarryTalk, rs_requestStartDemoTalk_bytes) &&
               CheckBytes(rs_requestStartDemoWithPlayerUseCoinTalk, rs_requestStartDemoTalk_bytes) &&
               CheckBytes(rs_requestStartDemoNormalTalk, rs_requestStartDemoTalk_bytes) &&
+              CheckBytes(rs_requestStartDemoWithPlayer, rs_requestStartDemoWithPlayer_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
@@ -3574,6 +3587,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     NpcDemoKeepCarryHook::InstallAtOffset(rs_requestStartDemoWithPlayerKeepCarryTalk);
     NpcDemoUseCoinHook::InstallAtOffset(rs_requestStartDemoWithPlayerUseCoinTalk);
     NpcDemoNormalHook::InstallAtOffset(rs_requestStartDemoNormalTalk);
+    DemoWithPlayerHook::InstallAtOffset(rs_requestStartDemoWithPlayer);
     DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);
     DemoAppearFromHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoAppearFromHome);
     StartActionDemoPlayerHook::InstallAtOffset(rs_startActionDemoPlayer);

@@ -470,4 +470,10 @@ constexpr u64 al_DemoDirector_requestEndDemo_bytes = 0xa9017bfdf81e0ff3ULL;
 // The Odyssey's own scenes (globe "Head to another kingdom?", take-off, paying moons)
 constexpr ptrdiff_t ShineTowerRocket_tryStartDemo = 0x30d598;
 constexpr u64 ShineTowerRocket_tryStartDemo_bytes = 0xa9017bfda9be4ff4ULL;
+// rs::requestStartDemoWithPlayer(LiveActor*, bool): the wardrobe (Closet::receiveMsg, returns to
+// 0x24ea40) and the Crazy Cap try-on (ShoppingWatcherStateWear::exeActionForDoshi, returns to 0x316cf0)
+constexpr ptrdiff_t rs_requestStartDemoWithPlayer = 0x54f740;
+constexpr u64 rs_requestStartDemoWithPlayer_bytes = 0xa9017bfda9be4ff4ULL;
+constexpr ptrdiff_t Closet_receiveMsg_demoRet = 0x24ea40;
+constexpr ptrdiff_t ShoppingWatcherStateWear_demoRet = 0x316cf0;
 }  // namespace smo100
