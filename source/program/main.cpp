@@ -2993,6 +2993,18 @@ static void QueueSe(void* ctrl, ptrdiff_t pipeOff, const char* name) {
     e->frame = gFrame; e->slot = 0xfe; e->kind = KSe; e->strVptr = pipe;
     std::strncpy(e->name, name, sizeof(e->name) - 1);
 }
+// Let the game take him out of 2D the normal way: dimension keeper valid (+0x8), no 2D keep
+// (+0xb), no snap (puppet+0xae). Outside the 2D area ActorDimensionKeeper::update then switches
+// him to 3D itself. (Copying a 3D brother's flags copied "valid = 0", which freezes the keeper
+// in 2D: update() never changes mIs2D while invalid.)
+static void Force3D(al::LiveActor* who) {
+    void* pup = who ? coop::Field<void*>(who, smo100::PlayerActorHakoniwa_puppet) : nullptr;
+    void* dim = pup ? coop::Field<void*>(pup, 0x28) : nullptr;
+    if (dim == nullptr) return;
+    coop::SetField<u8>(dim, 0x8, 1);
+    coop::SetField<u8>(dim, 0xb, 0);
+    coop::SetField<u8>(pup, 0xae, 0);
+}
 static bool IsBinding(void* pup) {
     return coop::Field<void*>(pup, 0x70) != nullptr && coop::Field<void*>(pup, 0x78) != nullptr;
 }
@@ -4014,7 +4026,7 @@ static void Update() {
             // edge): use exactly where he stands, which is outside it, and drop any 2D keep.
             al::LiveActor* who = PlayerAt(f);
             al::LiveActor* lead = PlayerAt(gLeader);
-            coop::echo::Copy2D(lead, who);
+            coop::echo::Force3D(who);
             sead::Vector3f dst = al::getTrans(lead);
             dst.y += 5.0f;
             al::resetPosition(who, dst);
