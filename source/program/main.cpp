@@ -765,6 +765,7 @@ HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
                          (isCap && GameIsHaveCap(acc, name));
             if (!owned) continue;
             if (SceneHeapFree() < kMinFreeHeap) { skipped++; continue; }
+            COOP_LOG("Wardrobe: building Luigi preview %d '%s'", i, name);
             void* actor = operator new(0x108);
             GameLiveActorCtor(actor, "LuigiClosetModel");
             void* dyn = nullptr;
@@ -1131,12 +1132,18 @@ HOOK_DEFINE_TRAMPOLINE(IsHaveCapHook) {
     }
 };
 
-// Draw lists hold one executor per distinct model name, sized from the game's ExecuteOrder table
-// and filled without a bounds check. The closet now builds 58 Mario previews (14 update outfits)
-// plus Luigi's own, which overflowed the list on entering the Odyssey. Give every draw list room
-// for 128 more model names (8 bytes each; executors are only created when used).
-HOOK_DEFINE_TRAMPOLINE(DrawListCtorHook) {
+// Executor lists (movement/calc-anim/draw: one executor per distinct model name; model-draw lists:
+// one entry per model) are sized from the game's ExecuteOrder table and filled without a bounds
+// check (ExecutorListActorExecuteBase::registerActor, Ghidra 0x997330). The closet now builds 58
+// Mario previews (14 update outfits) plus Luigi's own, which overflowed them on entering the
+// Odyssey. Every such list gets room for 128 more (8 bytes each; filled only when used).
+HOOK_DEFINE_TRAMPOLINE(ExecuteListCtorHook) {
     static void Callback(void* self, const char* name, s32 capacity) { Orig(self, name, capacity + 128); }
+};
+HOOK_DEFINE_TRAMPOLINE(ModelDrawListCtorHook) {
+    static void Callback(void* self, const char* name, s32 capacity, const void* info) {
+        Orig(self, name, capacity + 128, info);
+    }
 };
 
 // RC car (Metro Kingdom): driving it is a capture of the RC man; StageScene::exeDemoHackStart and
@@ -3716,7 +3723,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(ShopStateInShop_appear, ShopStateInShop_appear_bytes) &&
               CheckBytes(al_createTextureInfo_path, al_createTextureInfo_path_bytes) &&
               CheckBytes(ShopLayoutInfo_loadTexture, ShopLayoutInfo_loadTexture_bytes) &&
-              CheckBytes(al_ExecutorListActorDraw_ctor, al_ExecutorListActorDraw_ctor_bytes) &&
+              CheckBytes(al_ExecutorListActorExecuteBase_ctor, al_ExecutorListActorExecuteBase_ctor_bytes) &&
+              CheckBytes(al_ExecutorListActorModelDrawBase_ctor, al_ExecutorListActorModelDrawBase_ctor_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
@@ -3827,7 +3835,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     ShopAppearHook::InstallAtOffset(ShopStateInShop_appear);
     ShopLoadTextureHook::InstallAtOffset(ShopLayoutInfo_loadTexture);
     CreateTextureInfoHook::InstallAtOffset(al_createTextureInfo_path);
-    DrawListCtorHook::InstallAtOffset(al_ExecutorListActorDraw_ctor);
+    ExecuteListCtorHook::InstallAtOffset(al_ExecutorListActorExecuteBase_ctor);
+    ModelDrawListCtorHook::InstallAtOffset(al_ExecutorListActorModelDrawBase_ctor);
     IsHaveClothHook::InstallAtOffset(rs_isHaveCloth);
     IsHaveCapHook::InstallAtOffset(rs_isHaveCap);
     DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);

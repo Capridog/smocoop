@@ -493,6 +493,8 @@ constexpr u64 ShopLayoutInfo_loadTexture_bytes = 0xa90167faa9ba6ffcULL;
 // al::ExecutorListActorDraw::ExecutorListActorDraw(const char* name, int capacity): one draw
 // executor per distinct model name, appended with no bounds check
 // (ExecutorListActorExecuteBase::registerActor, Ghidra 0x997330).
-constexpr ptrdiff_t al_ExecutorListActorDraw_ctor = 0x893f58;
-constexpr u64 al_ExecutorListActorDraw_ctor_bytes = 0xa9017bfdf81e0ff3ULL;
+constexpr ptrdiff_t al_ExecutorListActorExecuteBase_ctor = 0x8972a4;   // (name, int capacity)
+constexpr u64 al_ExecutorListActorExecuteBase_ctor_bytes = 0xa9017bfda9be4ff4ULL;
+constexpr ptrdiff_t al_ExecutorListActorModelDrawBase_ctor = 0x893fe8;  // (name, int capacity, ExecuteSystemInitInfo&)
+constexpr u64 al_ExecutorListActorModelDrawBase_ctor_bytes = 0xa9014ff4f81d0ff5ULL;
 }  // namespace smo100
