@@ -497,4 +497,10 @@ constexpr ptrdiff_t al_ExecutorListActorExecuteBase_ctor = 0x8972a4;   // (name,
 constexpr u64 al_ExecutorListActorExecuteBase_ctor_bytes = 0xa9017bfda9be4ff4ULL;
 constexpr ptrdiff_t al_ExecutorListActorModelDrawBase_ctor = 0x893fe8;  // (name, int capacity, ExecuteSystemInitInfo&)
 constexpr u64 al_ExecutorListActorModelDrawBase_ctor_bytes = 0xa9014ff4f81d0ff5ULL;
+// al::ActorExecuteInfo (0x90 bytes): updaters at +0x10 (count +8, room for 4), drawers at +0x38
+// (count +0x30, room for 11); addUpdater/addDrawer write with no bounds check.
+constexpr ptrdiff_t al_ActorExecuteInfo_addDrawer = 0x891c18;
+constexpr u64 al_ActorExecuteInfo_addDrawer_bytes = 0x8b080c08b9803008ULL;
+constexpr ptrdiff_t al_ActorExecuteInfo_addUpdater = 0x891bfc;
+constexpr u64 al_ActorExecuteInfo_addUpdater_bytes = 0x8b080c08b9800808ULL;
 }  // namespace smo100

@@ -1161,6 +1161,28 @@ HOOK_DEFINE_TRAMPOLINE(IsHaveCapHook) {
 // check (ExecutorListActorExecuteBase::registerActor, Ghidra 0x997330). The closet now builds 58
 // Mario previews (14 update outfits) plus Luigi's own, which overflowed them on entering the
 // Odyssey. Every such list gets room for 128 more (8 bytes each; filled only when used).
+// A model needing more draw passes than ActorExecuteInfo has room for overflows into the next heap
+// block (suspected for some Luigi pack outfits in the closet). Drop the extra pass instead.
+HOOK_DEFINE_TRAMPOLINE(AddDrawerHook) {
+    static void Callback(u8* info, void* drawer) {
+        if (coop::Field<s32>(info, 0x30) >= 11) {
+            static s32 sLog = 20;
+            if (sLog-- > 0) COOP_LOG("ExecuteInfo %p: drawer dropped (already 11)", info);
+            return;
+        }
+        Orig(info, drawer);
+    }
+};
+HOOK_DEFINE_TRAMPOLINE(AddUpdaterHook) {
+    static void Callback(u8* info, void* updater) {
+        if (coop::Field<s32>(info, 0x8) >= 4) {
+            static s32 sLog = 20;
+            if (sLog-- > 0) COOP_LOG("ExecuteInfo %p: updater dropped (already 4)", info);
+            return;
+        }
+        Orig(info, updater);
+    }
+};
 HOOK_DEFINE_TRAMPOLINE(ExecuteListCtorHook) {
     static void Callback(void* self, const char* name, s32 capacity) { Orig(self, name, capacity + 128); }
 };
@@ -3748,6 +3770,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_createTextureInfo_path, al_createTextureInfo_path_bytes) &&
               CheckBytes(ShopLayoutInfo_loadTexture, ShopLayoutInfo_loadTexture_bytes) &&
               CheckBytes(al_ExecutorListActorExecuteBase_ctor, al_ExecutorListActorExecuteBase_ctor_bytes) &&
+              CheckBytes(al_ActorExecuteInfo_addDrawer, al_ActorExecuteInfo_addDrawer_bytes) &&
+              CheckBytes(al_ActorExecuteInfo_addUpdater, al_ActorExecuteInfo_addUpdater_bytes) &&
               CheckBytes(al_ExecutorListActorModelDrawBase_ctor, al_ExecutorListActorModelDrawBase_ctor_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
@@ -3860,6 +3884,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     ShopLoadTextureHook::InstallAtOffset(ShopLayoutInfo_loadTexture);
     CreateTextureInfoHook::InstallAtOffset(al_createTextureInfo_path);
     ExecuteListCtorHook::InstallAtOffset(al_ExecutorListActorExecuteBase_ctor);
+    AddDrawerHook::InstallAtOffset(al_ActorExecuteInfo_addDrawer);
+    AddUpdaterHook::InstallAtOffset(al_ActorExecuteInfo_addUpdater);
     ModelDrawListCtorHook::InstallAtOffset(al_ExecutorListActorModelDrawBase_ctor);
     IsHaveClothHook::InstallAtOffset(rs_isHaveCloth);
     IsHaveCapHook::InstallAtOffset(rs_isHaveCap);
