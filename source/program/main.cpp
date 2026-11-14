@@ -646,12 +646,42 @@ static void SwapEntries() {
     gSwapped = !gSwapped;
 }
 
+// The Luigi mod's closet is green: ClosetHead / ClosetBody (state +0x28, [1] / [0]) have one
+// material "PicBase" whose white colour is red (240,0,5) for Mario and green (0,128,0) in the
+// Luigi pack. nn::ui2d::Material keeps black/white colours at +8/+0xc (Material::SetColorElement,
+// Ghidra 0xbfaee0); the root pane comes from IUseLayout(+8) -> getLayoutKeeper (vtable +8) ->
+// nn::ui2d::Layout (+0x10) -> root pane (+0x18), as in al::setPaneVtxColor.
+extern void* UiPaneFindMaterialByName(void* pane, const char* name, bool recursive) asm(
+    "_ZN2nn4ui2d4Pane18FindMaterialByNameEPKcb");
+static u8 gRed[4] = {0, 0, 0, 0};
+static void SetGreen(bool luigi) {
+    if (gState == nullptr) return;
+    auto** layouts = Field<u8**>(gState, 0x28);
+    if (layouts == nullptr) return;
+    for (s32 i = 0; i < 2; i++) {
+        u8* actor = layouts[i];
+        if (actor == nullptr) continue;
+        void* iu = actor + 8;
+        using GetKeeper = void* (*)(void*);
+        void* keeper = (*reinterpret_cast<GetKeeper**>(iu))[1](iu);
+        void* layout = keeper ? Field<void*>(keeper, 0x10) : nullptr;
+        void* root = layout ? Field<void*>(layout, 0x18) : nullptr;
+        u8* mat = root ? static_cast<u8*>(UiPaneFindMaterialByName(root, "PicBase", true)) : nullptr;
+        if (mat == nullptr) continue;
+        if (gRed[3] == 0) std::memcpy(gRed, mat + 0xc, 4);
+        static const u8 kGreen[4] = {0x00, 0x80, 0x00, 0xff};
+        std::memcpy(mat + 0xc, luigi ? kGreen : gRed, 4);
+    }
+}
+
 static void SetLuigiPreview(bool on) {
+    SetGreen(on);
     if (on != gSwapped) SwapEntries();
 }
 
 static void Reset() {
     gState = nullptr;
+    gRed[3] = 0;
     gLuigiSlots = nullptr;
     gSlotCount = 0;
     gSwapped = false;
