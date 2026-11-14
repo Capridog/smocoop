@@ -1575,6 +1575,7 @@ extern void GameMessageHolderInit(void*, const char*, const char*) asm(
 extern const char16_t* GameMessageHolderTryGetText(const void*, const char*) asm(
     "_ZNK2al13MessageHolder10tryGetTextEPKc");
 extern const char* GameLanguageString() asm("_ZN2al17getLanguageStringEv");
+extern sead::Heap* HeapMgrSetCurrentHeap(void*, sead::Heap*) asm("_ZN4sead7HeapMgr15setCurrentHeap_EPNS_4HeapE");
 namespace coop::text {
 struct Entry { char name[64]; void* holder; };
 static Entry gStage[96];
@@ -1597,9 +1598,19 @@ static void* Get(Entry* tab, s32& n, const char* archive, const char* name) {
     if (len == 0 || len >= 64) return nullptr;
     for (s32 i = 0; i < n; i++) if (std::strcmp(tab[i].name, name) == 0) return tab[i].holder;
     if (n >= 96) return nullptr;
+    // operator new goes to sead's *current* heap, which mid-frame (talking) can be one with no
+    // room: it returned null and MessageHolder's ctor crashed (Talkatoo). Allocate from the scene
+    // heap explicitly; the cache is dropped with the scene (Reset in the StageScene dtor).
+    sead::Heap* heap = al::getSceneHeap();
+    if (heap == nullptr) return nullptr;
+    sead::Heap* prevHeap = HeapMgrSetCurrentHeap(nullptr, heap);
     void* h = operator new(0x10);
-    GameMessageHolderCtor(h);
-    GameMessageHolderInit(h, archive, name);
+    if (h != nullptr) {
+        GameMessageHolderCtor(h);
+        GameMessageHolderInit(h, archive, name);
+    }
+    HeapMgrSetCurrentHeap(nullptr, prevHeap);
+    if (h == nullptr) return nullptr;
     // MessageHolder+8 -> sead::MessageSetBase, whose +8 is the LMS message data. When the Luigi
     // archive lacks this file the data stays null and every lookup (e.g. Talkatoo's
     // isExistLabelInStageMessage) dereferences it: crash. Keep using the game's holder then.
