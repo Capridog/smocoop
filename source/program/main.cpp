@@ -2050,6 +2050,20 @@ static void Note(void* state, const void* sensor) {
     for (auto& h : gHeld) if (h.obj == obj) { h.holder = who; return; }
     gHeld[gNext] = {obj, who}; gNext = (gNext + 1) % 24;
 }
+// MapObjStatePlayerHold keeps the holder's sensor at +0x20 (set by tryStartCarry*, cleared by kill,
+// Ghidra 0x3b6f48 / 0x3b6a4c) but accepts a new carry message at any time, so Mario bumping into
+// the nut Luigi holds would take it over (Mario's arms go up and he does the throw). A held object
+// refuses a pick-up from the other brother.
+static bool HeldByOther(void* state, const void* sensor) {
+    if (coop::gP2 == nullptr || sensor == nullptr) return false;
+    const void* cur = coop::Field<const void*>(state, 0x20);
+    if (cur == nullptr || cur == sensor) return false;
+    al::LiveActor* holder = AlGetSensorHost(cur);
+    al::LiveActor* who = AlGetSensorHost(sensor);
+    bool holderBrother = holder == coop::gP1 || holder == coop::gP2;
+    bool whoBrother = who == coop::gP1 || who == coop::gP2;
+    return holderBrother && whoBrother && holder != who;
+}
 static al::LiveActor* HolderOf(const al::LiveActor* obj) {
     for (auto& h : gHeld) if (h.obj == obj) return h.holder;
     return nullptr;
@@ -2058,6 +2072,7 @@ static al::LiveActor* HolderOf(const al::LiveActor* obj) {
 #define CARRY_HOOK(NAME)                                                         \
     HOOK_DEFINE_TRAMPOLINE(NAME) {                                               \
         static bool Callback(void* state, const void* msg, const void* sensor) { \
+            if (coop::carry::HeldByOther(state, sensor)) return false;           \
             bool r = Orig(state, msg, sensor);                                   \
             if (r) coop::carry::Note(state, sensor);                             \
             return r;                                                            \
