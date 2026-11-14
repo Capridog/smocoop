@@ -179,6 +179,7 @@ static al::LiveActor* HackActorOf(al::LiveActor* player) {
 static s32 gForcedRecovery[2] = {0, 0};  // frames during which isValid() is forced true
 static bool gBubbleRequest[2] = {false, false};
 static s32 gBubbleBusy[2] = {0, 0};  // >0 while a bubble is in flight or just landed
+static bool gRecoveryRelease;
 // Runs inside the player's own checkDeathArea (same place vanilla starts pit recovery).
 static void StartBubbleTo(al::LiveActor* who, al::LiveActor* to, s32 whoIdx) {
     using Fn = void (*)(al::LiveActor*, void*, void*, void*, void*, void*);
@@ -189,8 +190,10 @@ static void StartBubbleTo(al::LiveActor* who, al::LiveActor* to, s32 whoIdx) {
     sp->setSafetyPoint(spot, up, nullptr);
     gForcedRecovery[whoIdx] = 60 * 10;
     gBubbleBusy[whoIdx] = 60 * 10;  // cleared (to a 1 s grace) when the bubble lands
+    gRecoveryRelease = true;
     fn(who, Field<void*>(who, 0x148), Field<void*>(who, 0x1f8), Field<void*>(who, 0x1f0),
        Field<void*>(who, 0x200), Field<void*>(who, 0x3b8));
+    gRecoveryRelease = false;
     COOP_LOG("Bubble: P%d floating to P%d at (%.0f, %.0f, %.0f)", whoIdx + 1,
              2 - whoIdx, spot.x, spot.y, spot.z);
 }
@@ -217,7 +220,12 @@ static void RequestBubble(s32 i, const char* why) {
 // goes to its Dead nerve when PlayerFunction::isPlayerDeadStatus is true at appear, Ghidra
 // 0x469750 / exeDead 0x469e10), then he comes back in a bubble.
 static s32 gDying[2] = {0, 0};  // frames since the fatal hit (0 = not dying)
-constexpr s32 kDeathFrames = 110;
+constexpr s32 kDeathFrames = 150;  // ~2.5 s from going down to coming back (every kind of death)
+// Pits / quicksand / lava (the game's own "recover at the safety point" path): the brother stays
+// down, hidden where he went under, for the same time before his bubble.
+static s32 gDown[2] = {0, 0};
+static sead::Vector3f gDownPos[2] = {};
+// gRecoveryRelease (declared above): our own calls to the recovery routine go through
 static void StartDying(s32 i, const char* why) {
     if (gDying[i] > 0 || gBubbleRequest[i] || gBubbleBusy[i] > 60) return;
     gDying[i] = 1;
@@ -234,6 +242,18 @@ static void UpdateDying() {
             RequestBubble(i, "after the death animation");
         }
     }
+    for (s32 i = 0; i < 2; i++) {
+        if (gDown[i] <= 0) continue;
+        al::LiveActor* p = PlayerAt(i);
+        if (gGameOver || p == nullptr) { gDown[i] = 0; continue; }
+        al::setVelocityZero(p);
+        al::resetPosition(p, gDownPos[i]);
+        if (++gDown[i] >= kDeathFrames) {
+            gDown[i] = 0;
+            gBubbleBusy[i] = 0;
+            RequestBubble(i, "after going down");
+        }
+    }
 }
 static void RequestGameOver(const char* why) {
     if (gGameOver) return;
@@ -244,8 +264,10 @@ static void RequestGameOver(const char* why) {
 static void CallRecoveryRoutine(al::LiveActor* who) {
     using Fn = void (*)(al::LiveActor*, void*, void*, void*, void*, void*);
     auto fn = reinterpret_cast<Fn>(exl::util::modules::GetTargetStart() + smo100::PlayerRecoveryStart);
+    gRecoveryRelease = true;
     fn(who, Field<void*>(who, 0x148), Field<void*>(who, 0x1f8), Field<void*>(who, 0x1f0),
        Field<void*>(who, 0x200), Field<void*>(who, 0x3b8));
+    gRecoveryRelease = false;
 }
 
 static s32 gIgnoreJumps = 0;  // frames during which position jumps are our own teleports
@@ -2754,8 +2776,38 @@ HOOK_DEFINE_TRAMPOLINE(DamageHook) {
     }
 };
 
+namespace coop {
+static void BeginDown(s32 i, const char* why) {
+    al::LiveActor* p = PlayerAt(i);
+    if (p == nullptr || gDown[i] > 0 || gDying[i] > 0) return;
+    gDown[i] = 1;
+    gDownPos[i] = al::getTrans(p);
+    gBubbleBusy[i] = 60 * 10;
+    gForcedRecovery[i] = 60 * 10;
+    RsHideDemoPlayer(p);
+    COOP_LOG("P%d down (%s): back in a bubble in a moment", i + 1, why);
+}
+static s32 IdxOfKeeper(void* keeper) {
+    al::LiveActor* a = keeper ? Field<al::LiveActor*>(keeper, 0x0) : nullptr;
+    return a == nullptr ? -1 : (a == gP1 ? 0 : (a == gP2 ? 1 : -1));
+}
+}  // namespace coop
+// The game's pit / quicksand / lava recovery (local routine main+0x4273f4, called from
+// checkDeathArea): while the other brother can catch him, the brother goes down for a moment
+// first instead of rising in the bubble straight away.
+HOOK_DEFINE_TRAMPOLINE(RecoveryRoutineHook) {
+    static void Callback(al::LiveActor* who, void* a, void* b, void* c, void* d, void* e) {
+        s32 idx = who == coop::gP1 ? 0 : (who == coop::gP2 ? 1 : -1);
+        if (!coop::gRecoveryRelease && idx >= 0 && coop::gP1 != nullptr && coop::gP2 != nullptr && !coop::gGameOver) {
+            if (coop::gDown[idx] > 0) return;
+            if (coop::PartnerAvailable(idx)) { coop::BeginDown(idx, "fell"); return; }
+        }
+        Orig(who, a, b, c, d, e);
+    }
+};
 HOOK_DEFINE_TRAMPOLINE(DamageForceHook) {
     static void Callback(void* keeper, s32 damageType) {
+        if (s32 k = coop::IdxOfKeeper(keeper); k >= 0 && (coop::gDown[k] > 0 || coop::gDying[k] > 0)) return;
         if (TrySaveP1(keeper, damageType, "last heart in a pit", false)) return;
         if (!IsP2Keeper(keeper)) return Orig(keeper, damageType);
         // vanilla only uses damageForce for the pit/quicksand "lose a heart and recover" path
@@ -2765,8 +2817,9 @@ HOOK_DEFINE_TRAMPOLINE(DamageForceHook) {
 
 HOOK_DEFINE_TRAMPOLINE(DeadHook) {
     static void Callback(void* keeper) {
+        if (s32 k = coop::IdxOfKeeper(keeper); k >= 0 && (coop::gDown[k] > 0 || coop::gDying[k] > 0)) return;
         if (!IsP2Keeper(keeper)) return Orig(keeper);
-        if (coop::PartnerAvailable(1)) coop::RequestBubble(1, "would have died");
+        if (coop::PartnerAvailable(1)) coop::BeginDown(1, "would have died");
         else coop::RequestGameOver("P2 died while P1 in a bubble");
     }
 };
@@ -3097,6 +3150,7 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
             if (idx >= 0 && coop::gBubbleRequest[idx] && !coop::gGameOver) {
                 coop::gBubbleRequest[idx] = false;
                 al::LiveActor* to = idx == 0 ? coop::gP2 : coop::gP1;
+                RsShowDemoPlayer(actor);  // back from going down (no-op otherwise)
                 if (coop::GameIsPlayer2DEarly(actor) || coop::GameIsPlayer2DEarly(to)) {
                     // No bubbles in 8-bit wall sections: he reappears right beside his brother
                     // (on the wall too if his brother is on it).
@@ -3382,8 +3436,14 @@ HOOK_DEFINE_TRAMPOLINE(PressedHook) {
                                                 smo100::PlayerActorHakoniwa_collision))
                 idx = i;
         if (idx < 0) return pressed;
+        if (coop::gDying[idx] > 0 || coop::gDown[idx] > 0) return false;
         if (coop::PartnerAvailable(idx)) {
-            coop::RequestBubble(idx, "crushed");
+            // the game's damage state plays the death animation while isPlayerDeadStatus is true
+            if (void* keeper = coop::Field<void*>(coop::PlayerAt(idx), smo100::PlayerActorHakoniwa_damageKeeper)) {
+                coop::SetField<u8>(keeper, 0x10, 1);
+                coop::SetField<s32>(keeper, 0x14, 0);
+            }
+            coop::StartDying(idx, "crushed");
             return false;
         }
         if (idx == 1) {
@@ -3504,6 +3564,7 @@ static void Reset() {
     coop::gBubbleRequest[0] = coop::gBubbleRequest[1] = false;
     coop::gBubbleBusy[0] = coop::gBubbleBusy[1] = 0;
     coop::gDying[0] = coop::gDying[1] = 0;
+    coop::gDown[0] = coop::gDown[1] = 0;
 }
 // called once per frame from StageSceneControl
 static void Update() {
@@ -4091,6 +4152,7 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(HackCap_sendMsgStartHack, HackCap_sendMsgStartHack_bytes) &&
               CheckBytes(HackCap_attackSensor, HackCap_attackSensor_bytes) &&
               CheckBytes(PlayerFunction_isPlayerDeadStatus, PlayerFunction_isPlayerDeadStatus_bytes) &&
+              CheckBytes(PlayerRecoveryStart, PlayerRecoveryStart_bytes) &&
               CheckBytes(StageSceneStateMiss_checkMiss, StageSceneStateMiss_checkMiss_bytes) &&
               CheckBytes(HackCap_attackSpin, HackCap_attackSpin_bytes) &&
               CheckBytes(rs_isHaveCloth, rs_isHaveCloth_bytes) &&
@@ -4211,6 +4273,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     DemoWithPlayerHook::InstallAtOffset(rs_requestStartDemoWithPlayer);
     CapStartHackHook::InstallAtOffset(HackCap_sendMsgStartHack);
     DeadStatusHook::InstallAtOffset(PlayerFunction_isPlayerDeadStatus);
+    RecoveryRoutineHook::InstallAtOffset(PlayerRecoveryStart);
     CheckMissHook::InstallAtOffset(StageSceneStateMiss_checkMiss);
     CapAttackSensorHook::InstallAtOffset(HackCap_attackSensor);
     CapAttackSpinHook::InstallAtOffset(HackCap_attackSpin);
