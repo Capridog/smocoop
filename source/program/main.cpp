@@ -744,10 +744,45 @@ static void TrimUpdateOutfits(u8* state) {
         COOP_LOG("Wardrobe: %d update outfits left out of the closet (%d -> %d entries)", n - first, n, first);
     }
 }
+// StageSceneStateCloset::StageSceneStateCloset builds its entries from rs::getClothList /
+// rs::getCapList (GameDataHolder +0x110 / +0x120: count, ItemInfo** with the name at +4). The
+// update outfits are appended to the end of those lists, so while the closet is built the counts
+// stop before them; the entries and previews then match the 1.0.0 closet.
+HOOK_DEFINE_TRAMPOLINE(ClosetCtorHook) {
+    static void Callback(void* self, const char* name, u8* scene, const void* ai, const void* li, void* closet) {
+        s32 saved[2] = {-1, -1};
+        u8* holder = nullptr;
+        if (kTrimUpdateOutfits && scene != nullptr) {
+            GameDataHolderWriter acc{nullptr};
+            GameAccessorCtor(&acc, scene + 0x20);
+            holder = static_cast<u8*>(acc.holder);
+        }
+        if (holder != nullptr) {
+            const ptrdiff_t lists[2] = {0x110, 0x120};
+            for (s32 l = 0; l < 2; l++) {
+                s32 n = coop::Field<s32>(holder, lists[l]);
+                u8** items = coop::Field<u8**>(holder, lists[l] + 8);
+                if (items == nullptr || n <= 0) continue;
+                s32 k = n;
+                while (k > 0 && items[k - 1] != nullptr &&
+                       IsUpdateOutfit(reinterpret_cast<const char*>(items[k - 1] + 4)))
+                    k--;
+                if (k < n) { saved[l] = n; coop::SetField<s32>(holder, lists[l], k); }
+            }
+            COOP_LOG("Wardrobe: closet built without the update outfits (cloth %d->%d, cap %d->%d)",
+                     saved[0], saved[0] < 0 ? -1 : coop::Field<s32>(holder, 0x110),
+                     saved[1], saved[1] < 0 ? -1 : coop::Field<s32>(holder, 0x120));
+        }
+        Orig(self, name, scene, ai, li, closet);
+        if (holder != nullptr) {
+            if (saved[0] >= 0) coop::SetField<s32>(holder, 0x110, saved[0]);
+            if (saved[1] >= 0) coop::SetField<s32>(holder, 0x120, saved[1]);
+        }
+    }
+};
 HOOK_DEFINE_TRAMPOLINE(ClosetInitModelHook) {
     static void Callback(u8* state, const al::ActorInitInfo& info) {
         using namespace coop::closet;
-        TrimUpdateOutfits(state);
         Orig(state, info);
         gState = state;
         gLuigiSlots = nullptr;
@@ -3861,6 +3896,7 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(al_ActorExecuteInfo_addDrawer, al_ActorExecuteInfo_addDrawer_bytes) &&
               CheckBytes(al_ActorExecuteInfo_addUpdater, al_ActorExecuteInfo_addUpdater_bytes) &&
               CheckBytes(al_ExecuteTableHolderDraw_init, al_ExecuteTableHolderDraw_init_bytes) &&
+              CheckBytes(StageSceneStateCloset_ctor, StageSceneStateCloset_ctor_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoReturnToHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(ProjectDemoDirector_requestStartDemoAppearFromHome, PDD_requestStartDemoHome_bytes) &&
               CheckBytes(rs_startActionDemoPlayer, rs_startActionDemoPlayer_bytes) &&
@@ -3975,6 +4011,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     AddDrawerHook::InstallAtOffset(al_ActorExecuteInfo_addDrawer);
     AddUpdaterHook::InstallAtOffset(al_ActorExecuteInfo_addUpdater);
     DrawTableInitHook::InstallAtOffset(al_ExecuteTableHolderDraw_init);
+    ClosetCtorHook::InstallAtOffset(StageSceneStateCloset_ctor);
     IsHaveClothHook::InstallAtOffset(rs_isHaveCloth);
     IsHaveCapHook::InstallAtOffset(rs_isHaveCap);
     DemoReturnToHomeHook::InstallAtOffset(ProjectDemoDirector_requestStartDemoReturnToHome);

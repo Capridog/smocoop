@@ -512,4 +512,6 @@ constexpr u64 al_ExecuteTableHolderDraw_init_bytes = 0xa90167faa9ba6ffcULL;
 // every model/layout texture is registered into (Ghidra 0x83ab30 / 0x875f24).
 constexpr ptrdiff_t sead_GraphicsNvn_ctor = 0x73ab30;
 constexpr u64 sead_GraphicsNvn_ctor_bytes = 0xa9017bfda9be4ff4ULL;
+constexpr ptrdiff_t StageSceneStateCloset_ctor = 0x4d4340;
+constexpr u64 StageSceneStateCloset_ctor_bytes = 0xa90157f6f81c0ff7ULL;
 }  // namespace smo100
