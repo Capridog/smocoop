@@ -3454,6 +3454,7 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
                     coop::gBubbleBusy[idx] = 60;
                     coop::gRespawnAbove[idx] = false;
                     if (coop::GameIsPlayer2DEarly(to)) coop::echo::Copy2D(to, actor);
+                    else coop::echo::Force3D(actor);  // he is out in 3D: come out of the wall to him
                     coop::PlaceBeside(actor, to, "2D section: no bubble");
                     return Orig(self);
                 }
@@ -4234,6 +4235,8 @@ static s32 gLeader = -1;
 static s32 gRetry = 0;        // frames until we check that the brought-out brother really is 3D
 static s32 gRetryLeader = -1;
 static s32 gRetryCount = 0;
+static s32 gExit[2] = {0, 0};      // frames left to bring the other one out after P<i> left 2D
+static s32 gExitWait[2] = {0, 0};
 }  // namespace coop::dim
 namespace coop::dim {
 static void Update() {
@@ -4268,12 +4271,28 @@ static void Update() {
         }
         if (gJoin2D[i] == 0) COOP_LOG("2D: P%d did not switch to 2D", i + 1);
     }
+    // Latch "P<i> left the wall" on the 2D->3D edge, whatever caused it (walking out of the end,
+    // an exit pipe the other couldn't follow through, ...), and keep it until the other one is
+    // out too: a one-frame check missed exits made while a pipe follow / bubble / death was busy.
+    // A brother who only left 2D by dying or going down does not count.
     for (s32 i = 0; i < 2; i++) {
-        if (gWas2D[i] && !now[i] && now[1 - i] && !coop::echo::Active() &&
-            gBubbleBusy[1 - i] == 0 && gTimer == 0) {
-            gLeader = i;
-            gTimer = 30;
-            COOP_LOG("2D: P%d left the wall section, bringing P%d out", i + 1, 2 - i);
+        bool out = gDying[i] > 0 || gDown[i] > 0 || gBubbleRequest[i] || gBubbleBusy[i] > 60;
+        if (gWas2D[i] && !now[i] && !out) { gExit[i] = 60 * 12; }
+        if (now[i] || out || !now[1 - i]) gExit[i] = 0;  // back in, down, or the other is out too
+        if (gExit[i] > 0) {
+            gExit[i]--;
+            coop::cam::gBubbleCooldown = 30;  // no off-screen rule pulling him back into the wall
+            s32 o = 1 - i;
+            bool otherFree = gDying[o] == 0 && gDown[o] == 0 && !gBubbleRequest[o] && gBubbleBusy[o] <= 60;
+            if (++gExitWait[i] >= 30 && otherFree && !coop::echo::Active() && gTimer == 0 && gRetry == 0) {
+                gLeader = i;
+                gTimer = 1;
+                gExitWait[i] = 0;
+                gExit[i] = 0;
+                COOP_LOG("2D: P%d left the wall section, bringing P%d out", i + 1, 2 - i);
+            }
+        } else {
+            gExitWait[i] = 0;
         }
     }
     if (gTimer > 0 && --gTimer == 0 && gLeader >= 0) {
@@ -4298,7 +4317,7 @@ static void Update() {
     }
     if (gRetry > 0 && --gRetry == 0 && gRetryLeader >= 0) {
         s32 f = 1 - gRetryLeader;
-        if (now[f] && !now[gRetryLeader] && gRetryCount < 3 && gBubbleBusy[f] == 0) {
+        if (now[f] && !now[gRetryLeader] && gRetryCount < 5 && gBubbleBusy[f] <= 60) {
             gRetryCount++;
             gLeader = gRetryLeader;
             gTimer = 1;  // try again next frame
@@ -4313,6 +4332,7 @@ static void Update() {
 }
 static void Reset() {
     gWas2D[0] = gWas2D[1] = false; gTimer = 0; gLeader = -1; gRetry = 0; gRetryLeader = -1; gRetryCount = 0;
+    gExit[0] = gExit[1] = gExitWait[0] = gExitWait[1] = 0;
     gJoin2D[0] = gJoin2D[1] = 0;
 }
 }  // namespace coop::dim
