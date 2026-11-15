@@ -3425,6 +3425,7 @@ HOOK_DEFINE_TRAMPOLINE(DokanStageChangeAttackHook) {
 // Bubble requests are executed from inside the player's own checkDeathArea(), exactly where the
 // vanilla pit-recovery branch runs (it returns true after starting recovery). Calling the recovery
 // routine from outside the player's update (first attempt) did not stick.
+extern void DimKeeperInvalidateEarly(void*) asm("_ZN20ActorDimensionKeeper10invalidateEv");
 HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
     static bool Callback(PlayerActorHakoniwa* self) {
         auto* actor = reinterpret_cast<al::LiveActor*>(self);
@@ -3447,21 +3448,13 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
                 coop::gBubbleRequest[idx] = false;
                 al::LiveActor* to = idx == 0 ? coop::gP2 : coop::gP1;
                 RsShowDemoPlayer(actor);  // back from going down (no-op otherwise)
-                if (coop::GameIsPlayer2DEarly(actor) || coop::GameIsPlayer2DEarly(to)) {
-                    // No bubbles in 8-bit wall sections: he reappears right beside his brother
-                    // (on the wall too if his brother is on it).
-                    coop::gForcedRecovery[idx] = 0;
-                    coop::gBubbleBusy[idx] = 60;
-                    coop::gRespawnAbove[idx] = false;
-                    if (coop::GameIsPlayer2DEarly(to)) coop::echo::Copy2D(to, actor);
-                    else coop::echo::Force3D(actor);  // he is out in 3D: come out of the wall to him
-                    coop::PlaceBeside(actor, to, "2D section: no bubble");
-                    // Out of his death (the 2D death never ends on its own: its miss is blocked)
-                    // and back in play: start falling from the spot beside his brother.
-                    al::setNerve(reinterpret_cast<al::IUseNerve*>(actor),
-                                 reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() +
-                                                                    smo100::NrvPlayerFall));
-                    return Orig(self);
+                if (coop::GameIsPlayer2DEarly(actor)) {
+                    // He went down on an 8-bit wall: he leaves the wall (the game's own 2D->3D
+                    // switch) and comes back in a bubble like anywhere else. The bubble keeps in
+                    // front of the wall and pops onto the wall beside his brother if his brother
+                    // is still on it (RecoveryFlyHook / EndRecoveryHook).
+                    if (void* dim = coop::Field<void*>(actor, 0x150)) DimKeeperInvalidateEarly(dim);
+                    COOP_LOG("P%d leaves the wall for his bubble", idx + 1);
                 }
                 if (coop::gRespawnAbove[idx]) {
                     // 3D World: after a death the bubble comes in from above the other brother
@@ -3469,6 +3462,18 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
                     coop::gRespawnAbove[idx] = false;
                     sead::Vector3f top = al::getTrans(to);
                     top.y += 300.0f;
+                    if (coop::GameIsPlayer2DEarly(to)) {
+                        // brother on a wall: start in front of it (camera side), never inside it
+                        sead::Vector3f fr;
+                        coop::AlCalcFrontDir(&fr, to);
+                        sead::Vector3f n = {-fr.z, 0.0f, fr.x};
+                        auto* camUser = reinterpret_cast<const al::IUseCamera*>(
+                            reinterpret_cast<const u8*>(to) + smo100::LiveActor_IUseCamera);
+                        const sead::Vector3f& cp = al::getCameraPos(camUser, 0);
+                        if ((cp.x - top.x) * n.x + (cp.z - top.z) * n.z < 0.0f) { n.x = -n.x; n.z = -n.z; }
+                        float nl = __builtin_sqrtf(n.x * n.x + n.z * n.z);
+                        if (nl > 0.001f) { top.x += n.x / nl * 250.0f; top.z += n.z / nl * 250.0f; }
+                    }
                     al::resetPosition(actor, top);
                     al::setVelocityZero(actor);
                     coop::gIgnoreJumps = 10;
