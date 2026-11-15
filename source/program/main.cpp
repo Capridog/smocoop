@@ -179,7 +179,8 @@ static al::LiveActor* HackActorOf(al::LiveActor* player) {
 // point (PlayerActorHakoniwa+0x270). We point the safety point beside the other brother first.
 static s32 gForcedRecovery[2] = {0, 0};  // frames during which isValid() is forced true
 static bool gBubbleRequest[2] = {false, false};
-static s32 gBubbleBusy[2] = {0, 0};  // >0 while a bubble is in flight or just landed
+static s32 gBubbleBusy[2] = {0, 0};
+static bool gWallBubble[2] = {false, false};  // short bubble beside a brother on a wall  // >0 while a bubble is in flight or just landed
 static bool gRecoveryRelease;
 // Runs inside the player's own checkDeathArea (same place vanilla starts pit recovery).
 static void StartBubbleTo(al::LiveActor* who, al::LiveActor* to, s32 whoIdx) {
@@ -3457,24 +3458,37 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
                     if (void* dim = coop::Field<void*>(actor, 0x150)) DimKeeperInvalidateEarly(dim);
                     COOP_LOG("P%d leaves the wall for his bubble", idx + 1);
                 }
-                if (coop::gRespawnAbove[idx]) {
+                if (coop::GameIsPlayer2DEarly(to)) {
+                    // Brother on an 8-bit wall: the bubble appears right beside him (a little in
+                    // front of the wall) and pops onto the wall after a moment. A long 3D flight
+                    // past the wall made the game's wall camera swing in.
+                    coop::gRespawnAbove[idx] = false;
+                    sead::Vector3f fr;
+                    coop::AlCalcFrontDir(&fr, to);
+                    fr.y = 0.0f;
+                    float fl = __builtin_sqrtf(fr.x * fr.x + fr.z * fr.z);
+                    if (fl < 0.001f) { fr = {1.0f, 0.0f, 0.0f}; fl = 1.0f; }
+                    fr.x /= fl; fr.z /= fl;
+                    sead::Vector3f n = {-fr.z, 0.0f, fr.x};
+                    sead::Vector3f top = al::getTrans(to);
+                    auto* camUser = reinterpret_cast<const al::IUseCamera*>(
+                        reinterpret_cast<const u8*>(to) + smo100::LiveActor_IUseCamera);
+                    const sead::Vector3f& cp = al::getCameraPos(camUser, 0);
+                    if ((cp.x - top.x) * n.x + (cp.z - top.z) * n.z < 0.0f) { n.x = -n.x; n.z = -n.z; }
+                    // behind him along the wall (the side he came from), slightly above, in front
+                    top.x += -fr.x * 110.0f + n.x * 60.0f;
+                    top.z += -fr.z * 110.0f + n.z * 60.0f;
+                    top.y += 90.0f;
+                    al::resetPosition(actor, top);
+                    al::setVelocityZero(actor);
+                    coop::gIgnoreJumps = 10;
+                    coop::gWallBubble[idx] = true;
+                } else if (coop::gRespawnAbove[idx]) {
                     // 3D World: after a death the bubble comes in from above the other brother
                     // (on screen), not from wherever he died
                     coop::gRespawnAbove[idx] = false;
                     sead::Vector3f top = al::getTrans(to);
                     top.y += 300.0f;
-                    if (coop::GameIsPlayer2DEarly(to)) {
-                        // brother on a wall: start in front of it (camera side), never inside it
-                        sead::Vector3f fr;
-                        coop::AlCalcFrontDir(&fr, to);
-                        sead::Vector3f n = {-fr.z, 0.0f, fr.x};
-                        auto* camUser = reinterpret_cast<const al::IUseCamera*>(
-                            reinterpret_cast<const u8*>(to) + smo100::LiveActor_IUseCamera);
-                        const sead::Vector3f& cp = al::getCameraPos(camUser, 0);
-                        if ((cp.x - top.x) * n.x + (cp.z - top.z) * n.z < 0.0f) { n.x = -n.x; n.z = -n.z; }
-                        float nl = __builtin_sqrtf(n.x * n.x + n.z * n.z);
-                        if (nl > 0.001f) { top.x += n.x / nl * 250.0f; top.z += n.z / nl * 250.0f; }
-                    }
                     al::resetPosition(actor, top);
                     al::setVelocityZero(actor);
                     coop::gIgnoreJumps = 10;
@@ -3739,7 +3753,9 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
         }
         // 8-bit wall: the brother on the wall can't reach a bubble in front of it; it pops by
         // itself once it is near him (no bubbles in 2D) and he drops onto the wall with him
-        bool wallPop = coop::GameIsPlayer2DEarly(rescuer) && dx * dx + dy * dy + dz * dz < 700.0f * 700.0f;
+        bool wallPop = coop::GameIsPlayer2DEarly(rescuer) &&
+                       (dx * dx + dy * dy + dz * dz < 700.0f * 700.0f ||
+                        (coop::gWallBubble[slot] && al::getNerveStep(nerveUser) >= 40));
         if (capPop || wallPop || dx * dx + dy * dy + dz * dz < kBubbleTouch * kBubbleTouch) {
             if (capPop) COOP_LOG("Bubble: hit by P%d's Cappy", rescuerSlot + 1);
             sead::Vector3f pp = pos;
@@ -3788,6 +3804,7 @@ HOOK_DEFINE_TRAMPOLINE(EndRecoveryHook) {
                     COOP_LOG("Bubble: P%d joins P%d in the 2D section", i + 1, 2 - i);
                 }
                 gBubbleInto2D[i] = false;
+                coop::gWallBubble[i] = false;
             }
         }
     }
