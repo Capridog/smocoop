@@ -43,6 +43,7 @@ static char gP2CapName[64] = {};
 static bool gOutfitDirty = false;  // save Luigi's outfit file at the next stage load
 static bool gClosetP2 = false;   // P2 is using the wardrobe right now (Closet bind -> state kill)
 static bool gUiPortP2 = false;   // al::getMainControllerPort answers P2's port
+static bool gPauseMenuOpen = false;  // pause menu open: both controllers work there
 static bool gLuigiCloset = false;
 static bool gClosetStartP2Pending = false;  // P2 wore something: next stage start is Luigi's
 static bool gClosetStartP2 = false;         // this stage: Luigi steps out of the booth
@@ -471,6 +472,7 @@ HOOK_DEFINE_TRAMPOLINE(StageSceneInit) {
         coop::dim::Reset();
         coop::gClosetP2 = false;
         coop::gUiPortP2 = false;
+        coop::gPauseMenuOpen = false;
         coop::gClosetStartP2 = coop::gClosetStartP2Pending;
         coop::gClosetStartP2Pending = false;
         coop::gClosetSwapDone = false;
@@ -2027,21 +2029,29 @@ extern bool GameIsPadTriggerA(s32 port) asm("_ZN2al13isPadTriggerAEi");
 extern bool GameIsPadTriggerB(s32 port) asm("_ZN2al13isPadTriggerBEi");
 extern s32 GameMainControllerPort() asm("_ZN2al21getMainControllerPortEv");
 
+// The pause menu (and its Options / Help screens) belongs to both: there the game's own 2P rule
+// (port 0 OR 1) applies, so Luigi can confirm / go back too, not only move the cursor.
+HOOK_DEFINE_TRAMPOLINE(PauseMenuAppearHook) {
+    static void Callback(void* self) { coop::gPauseMenuOpen = true; Orig(self); }
+};
+HOOK_DEFINE_TRAMPOLINE(PauseMenuKillHook) {
+    static void Callback(void* self) { coop::gPauseMenuOpen = false; Orig(self); }
+};
 HOOK_DEFINE_TRAMPOLINE(UiDecideHook) {
     static bool Callback(const void* holder) {
-        if (!coop::CoopModeOn(holder)) return Orig(holder);
+        if (!coop::CoopModeOn(holder) || coop::gPauseMenuOpen) return Orig(holder);
         return GameIsPadTriggerA(GameMainControllerPort());
     }
 };
 HOOK_DEFINE_TRAMPOLINE(UiDecideGdhHook) {
     static bool Callback(const u8* gdh) {
-        if (gdh == nullptr || gdh[0x245] == 0) return Orig(gdh);
+        if (gdh == nullptr || gdh[0x245] == 0 || coop::gPauseMenuOpen) return Orig(gdh);
         return GameIsPadTriggerA(GameMainControllerPort());
     }
 };
 HOOK_DEFINE_TRAMPOLINE(UiCancelHook) {
     static bool Callback(const void* holder) {
-        if (!coop::CoopModeOn(holder)) return Orig(holder);
+        if (!coop::CoopModeOn(holder) || coop::gPauseMenuOpen) return Orig(holder);
         return GameIsPadTriggerB(GameMainControllerPort());
     }
 };
@@ -4422,6 +4432,8 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(HackCap_sendMsgStartHack, HackCap_sendMsgStartHack_bytes) &&
               CheckBytes(HackCap_attackSensor, HackCap_attackSensor_bytes) &&
               CheckBytes(ProjectCameraInput_calcInputStick, ProjectCameraInput_calcInputStick_bytes) &&
+              CheckBytes(StageSceneStatePauseMenu_appear, 0xa9017bfdf81e0ff3ULL) &&
+              CheckBytes(StageSceneStatePauseMenu_kill, 0xa9017bfdf81e0ff3ULL) &&
               CheckBytes(PlayerFunction_isPlayerDeadStatus, PlayerFunction_isPlayerDeadStatus_bytes) &&
               CheckBytes(DokanPuppetController_exeIn, DokanPuppetController_exeIn_bytes) &&
               CheckBytes(DokanPuppetController_exeDirectIn, DokanPuppetController_exeDirectIn_bytes) &&
@@ -4553,6 +4565,8 @@ extern "C" void exl_main(void* x0, void* x1) {
     CheckMissHook::InstallAtOffset(StageSceneStateMiss_checkMiss);
     CapAttackSensorHook::InstallAtOffset(HackCap_attackSensor);
     CameraStickHook::InstallAtOffset(ProjectCameraInput_calcInputStick);
+    PauseMenuAppearHook::InstallAtOffset(StageSceneStatePauseMenu_appear);
+    PauseMenuKillHook::InstallAtOffset(StageSceneStatePauseMenu_kill);
     CapAttackSpinHook::InstallAtOffset(HackCap_attackSpin);
     ShopAppearHook::InstallAtOffset(ShopStateInShop_appear);
     ShopLoadTextureHook::InstallAtOffset(ShopLayoutInfo_loadTexture);
