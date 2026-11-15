@@ -240,7 +240,8 @@ namespace coop {
 static void UpdateDying() {
     for (s32 i = 0; i < 2; i++) {
         if (gDying[i] <= 0) continue;
-        if (gGameOver || PlayerAt(i) == nullptr) { gDying[i] = 0; continue; }
+        if (PlayerAt(i) == nullptr) { gDying[i] = 0; continue; }
+        if (gGameOver) continue;  // the stage restarts; he stays in his death animation
         if (++gDying[i] >= kDeathFrames) {
             gDying[i] = 0;
             gBubbleBusy[i] = 0;
@@ -250,7 +251,8 @@ static void UpdateDying() {
     for (s32 i = 0; i < 2; i++) {
         if (gDown[i] <= 0) continue;
         al::LiveActor* p = PlayerAt(i);
-        if (gGameOver || p == nullptr) { gDown[i] = 0; continue; }
+        if (p == nullptr) { gDown[i] = 0; continue; }
+        if (gGameOver) continue;  // stage restarts: he just keeps falling
         // first he keeps falling (sinking) for a second, then he is gone until the bubble
         if (gDown[i] < kFallFrames) {
             gDownPos[i] = al::getTrans(p);
@@ -2836,6 +2838,24 @@ static void GoDown(s32 i, const char* why) {
     StartDying(i, why);
     if (gDying[i] > 0) ForceDeathNerve(p);
 }
+// Luigi going down while Mario is already down: the stage restarts, but Luigi still plays his
+// own death (poison / normal death animation, or the death fall in a pit) instead of standing.
+static void RecoveryOrig(al::LiveActor* who, void* a, void* b, void* c, void* d, void* e);
+static void LastDeathP2(void* a, void* b, void* c, void* d, void* e) {
+    al::LiveActor* p = gP2;
+    if (p == nullptr || gDying[1] > 0 || gDown[1] > 0) return;
+    if (KeepsFalling(p)) {
+        gDown[1] = 1;
+        gDownPos[1] = al::getTrans(p);
+        gDownFall[1] = true;
+        if (a != nullptr) RecoveryOrig(p, a, b, c, d, e);
+        else CallRecoveryRoutine(p);
+    } else {
+        gDying[1] = 1;
+        ForceDeathNerve(p);
+    }
+    COOP_LOG("P2 plays his own death too");
+}
 static s32 IdxOfKeeper(void* keeper) {
     al::LiveActor* a = keeper ? Field<al::LiveActor*>(keeper, 0x0) : nullptr;
     return a == nullptr ? -1 : (a == gP1 ? 0 : (a == gP2 ? 1 : -1));
@@ -2865,11 +2885,19 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryRoutineHook) {
             // (Letting the game's own recovery run here sent both brothers into bubbles chasing
             // each other forever.)
             coop::RequestGameOver(idx == 0 ? "P1 down while P2 is down" : "P2 down while P1 is down");
+            if (idx == 1) coop::LastDeathP2(a, b, c, d, e);
             return;  // P1: the forced death runs from his next checkDeathArea
         }
         Orig(who, a, b, c, d, e);
     }
 };
+namespace coop {
+static void RecoveryOrig(al::LiveActor* who, void* a, void* b, void* c, void* d, void* e) {
+    gRecoveryRelease = true;
+    RecoveryRoutineHook::Orig(who, a, b, c, d, e);
+    gRecoveryRelease = false;
+}
+}  // namespace coop
 HOOK_DEFINE_TRAMPOLINE(DamageForceHook) {
     static void Callback(void* keeper, s32 damageType) {
         if (s32 k = coop::IdxOfKeeper(keeper); k >= 0 && (coop::gDown[k] > 0 || coop::gDying[k] > 0)) return;
@@ -2889,7 +2917,7 @@ HOOK_DEFINE_TRAMPOLINE(DeadHook) {
         }
         if (!IsP2Keeper(keeper)) return Orig(keeper);
         if (coop::PartnerAvailable(1)) coop::GoDown(1, "would have died");
-        else coop::RequestGameOver("P2 died while P1 in a bubble");
+        else { coop::RequestGameOver("P2 died while P1 in a bubble"); coop::LastDeathP2(nullptr, nullptr, nullptr, nullptr, nullptr); }
     }
 };
 
@@ -2902,7 +2930,7 @@ HOOK_DEFINE_TRAMPOLINE(DeadStatusHook) {  // PlayerFunction::isPlayerDeadStatus
 };
 HOOK_DEFINE_TRAMPOLINE(CheckMissHook) {  // StageSceneStateMiss::checkMiss: Mario's co-op death isn't a miss
     static bool Callback(const void* state) {
-        if (coop::gDying[0] > 0 || coop::gDown[0] > 0) return false;
+        if (!coop::gGameOver && (coop::gDying[0] > 0 || coop::gDown[0] > 0)) return false;
         return Orig(state);
     }
 };
