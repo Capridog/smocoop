@@ -2835,7 +2835,11 @@ namespace coop {
 // PlayerStateDamageLife::appear goes to its Dead nerve and exeDead plays Dead / DeadPoison.
 // (Poison doesn't come through PlayerDamageKeeper::damage, so the damage flag alone did nothing.)
 static void ForceDeathNerve(al::LiveActor* p) {
-    auto* nrv = reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() + 0x1d789b0);
+    uintptr_t base = exl::util::modules::GetTargetStart();
+    // in water: the swim damage state (水中・水面ダメージ 0x1e789b8, PlayerStateDamageSwim::exeDead)
+    // so drowning / underwater deaths get the swimming death; otherwise ダメージ 0x1e789b0
+    bool swim = AlIsNerve(p, reinterpret_cast<const al::Nerve*>(base + 0x1d789a8));
+    auto* nrv = reinterpret_cast<const al::Nerve*>(base + (swim ? 0x1d789b8 : 0x1d789b0));
     al::setNerve(reinterpret_cast<al::IUseNerve*>(p), nrv);
 }
 // Pits (death areas) and quicksand keep their own fall / sink; anything else (poison goop, ...)
@@ -3663,9 +3667,10 @@ HOOK_DEFINE_TRAMPOLINE(PressedHook) {
         if (coop::gDying[idx] > 0 || coop::gDown[idx] > 0) return false;
         if (coop::PartnerAvailable(idx)) {
             // the game's damage state plays the death animation while isPlayerDeadStatus is true
+            // the game's own crush death (PlayerStatePress, 圧死): executePreMovementNerveChange
+            // calls PlayerDamageKeeper::dead (skipped by DeadHook while dying) and sets the nerve
             coop::StartDying(idx, "crushed");
-            coop::ForceDeathNerve(coop::PlayerAt(idx));
-            return false;
+            return true;
         }
         if (idx == 1) {
             coop::RequestGameOver("P2 crushed while P1 in a bubble");
