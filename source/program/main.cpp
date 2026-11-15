@@ -1119,6 +1119,15 @@ HOOK_DEFINE_TRAMPOLINE(DemoStartHook) {
         if (!r || capture || type < 3 || type == 9 || coop::gTalkP2 || coop::gClosetP2) return r;
         if (coop::cut::gRideRequest && coop::gP1 != nullptr && coop::gP2 != nullptr && !coop::cut::gRide &&
             coop::cut::gHidden == nullptr && !al::isDead(coop::gP2) && coop::gBubbleBusy[1] <= 60) {
+            if (coop::cut::gRocketRequest) {
+                // Odyssey take-off / globe / moon scenes: Mario boards the ship; Luigi standing
+                // on the ground (or clipping the hull) looked wrong, so he is on board out of
+                // view and comes back beside Mario when the scene ends.
+                RsHideDemoPlayer(coop::gP2);
+                coop::cut::gHidden = coop::gP2;
+                COOP_LOG("Cutscene %s: Odyssey scene, Luigi aboard (hidden)", name ? name : "?");
+                return r;
+            }
             coop::cut::gRide = true;  // Luigi stays visible and mirrors Mario (see coop::ride)
             // Odyssey scenes (globe, moon filling, take-off) walk Mario around the ship: Luigi stays
             // where he stands and only vanishes/reappears with Mario (boarding); following Mario's
@@ -3522,8 +3531,8 @@ static s32 BubbleSlot(const void* state) {
 //    bubble's position (start +0x50 = pos, horizontal +0x68 = 0, arc +0x48/+0x4c = 0,
 //    flightFrames = current step), so the vanilla end puts him right there and he drops down.
 constexpr float kBubbleHover = 90.0f;      // height above the rescuer's feet
-constexpr float kBubbleSide = 150.0f;      // distance beside him
-constexpr float kBubbleTouch = 130.0f;
+constexpr float kBubbleSide = 120.0f;      // distance beside him
+constexpr float kBubbleTouch = 175.0f;     // easy to pop by running into it (3D World)
 constexpr float kBubbleCapTouch = 170.0f;  // Cappy (spinning hat) to bubble centre     // rescuer within this distance pops it
 constexpr float kBubbleEase = 0.08f;       // fraction of the remaining way per frame
 constexpr float kBubbleMaxSpeed = 18.0f;   // units per frame near the rescuer
@@ -3929,6 +3938,9 @@ static void Update() {
     for (s32 i = 0; i < 2; i++)
         if (coop::gForcedRecovery[i] > 0) coop::gForcedRecovery[i]--;
     if (gBubbleCooldown > 0) gBubbleCooldown--;
+    // no off-screen bubbles during a cutscene or for 2 s after it (stage start, Odyssey scenes:
+    // the cutscene camera leaves one brother out of view without him being left behind)
+    if (rs::isActiveDemo(coop::gP1) || rs::isActiveDemo(coop::gP2)) gBubbleCooldown = 120;
     // As soon as one brother is off-screen (and the other is on-screen), bubble him to the other.
     // A 2-frame confirmation only filters single-frame projection noise (~0.03 s).
     s32 offIdx = -1;
