@@ -3884,6 +3884,8 @@ constexpr float k2DLeaderRelease = 450.0f;
 static sead::Vector3f gCourse = {};          // smoothed travel direction on the wall
 static sead::Vector3f gPrevMid2D = {};
 static bool gHaveMid2D = false;
+static s32 g2DSwitchCool = 0;
+static float gFull2D = -1.0f;   // full 3D distance while both are on a wall (else -1)
 
 static sead::Vector3f FocusPos(al::LiveActor* player, al::LiveActor* hack) {
     return al::getTrans(hack ? hack : player);
@@ -4000,9 +4002,9 @@ static void Update() {
         if (gHaveMid2D) {
             sead::Vector3f mv = {mid.x - gPrevMid2D.x, mid.y - gPrevMid2D.y, mid.z - gPrevMid2D.z};
             if (mv.x * mv.x + mv.y * mv.y + mv.z * mv.z < 200.0f * 200.0f) {
-                gCourse.x += (mv.x - gCourse.x) * 0.02f;
-                gCourse.y += (mv.y * 0.5f - gCourse.y) * 0.02f;  // falls count less than progress
-                gCourse.z += (mv.z - gCourse.z) * 0.02f;
+                gCourse.x += (mv.x - gCourse.x) * 0.01f;
+                gCourse.y += (mv.y * 0.5f - gCourse.y) * 0.01f;  // falls count less than progress
+                gCourse.z += (mv.z - gCourse.z) * 0.01f;
             }
         }
         gPrevMid2D = mid; gHaveMid2D = true;
@@ -4010,25 +4012,35 @@ static void Update() {
                                      (p2.z - p1.z) * (p2.z - p1.z));
         float ahead = (p2.x - p1.x) * gCourse.x + (p2.y - p1.y) * gCourse.y + (p2.z - p1.z) * gCourse.z;
         float cl = __builtin_sqrtf(gCourse.x * gCourse.x + gCourse.y * gCourse.y + gCourse.z * gCourse.z);
-        if (cl > 0.01f) ahead /= cl;
+        // only trust the course while the pair is really travelling (a near-zero average is just
+        // noise and made the camera flip between them every frame)
+        bool course = cl > 1.5f;
+        if (course) ahead /= cl;
         s32 front = ahead > 0.0f ? 1 : 0;
-        if (cl <= 0.01f) front = gLeader >= 0 ? gLeader : (gMoveP2 > gMoveP1 ? 1 : 0);  // no course yet
-        bool clearLead = ahead > 300.0f || ahead < -300.0f;  // a clear lead before switching
+        if (!course) front = gLeader >= 0 ? gLeader : (gMoveP2 > gMoveP1 ? 1 : 0);
+        if (g2DSwitchCool > 0) g2DSwitchCool--;
+        bool clearLead = course && (ahead > 300.0f || ahead < -300.0f) && g2DSwitchCool == 0;
         if (gLeader < 0 && full > k2DLeaderSep) {
             gLeader = front;
+            g2DSwitchCool = 120;
             COOP_LOG("Camera (2D): following P%d, who is ahead", gLeader + 1);
         } else if (gLeader >= 0 && full < k2DLeaderRelease) {
             gLeader = -1;
             COOP_LOG("Camera (2D): brothers back together, sharing view");
         } else if (gLeader >= 0 && gLeader != front && full > k2DLeaderSep && clearLead) {
             gLeader = front;
+            g2DSwitchCool = 120;  // at most one switch every 2 s
             COOP_LOG("Camera (2D): P%d took the lead", gLeader + 1);
         }
     } else {
         gHaveMid2D = false;
         gCourse = {0.0f, 0.0f, 0.0f};
     }
+    gFull2D = -1.0f;
     if (both2D) {
+        // walls go up as well as sideways (the round tower): use the full distance for the
+        // left-behind rule below
+        gFull2D = Dist(p1, p2);
     } else if (gLeader < 0 && sep > kLeaderSep) {
         gLeader = gMoveP2 > gMoveP1 ? 1 : 0;
         COOP_LOG("Camera: brothers split up, following P%d", gLeader + 1);
@@ -4047,7 +4059,7 @@ static void Update() {
     // As soon as one brother is off-screen (and the other is on-screen), bubble him to the other.
     // A 2-frame confirmation only filters single-frame projection noise (~0.03 s).
     s32 offIdx = -1;
-    if (sep > kBubbleSep) {
+    if ((gFull2D >= 0.0f ? gFull2D + (kBubbleSep - 600.0f) : sep) > kBubbleSep) {  // 600 on walls
         bool off1 = IsOffScreen(coop::gP1), off2 = IsOffScreen(coop::gP2);
         if (off1 != off2) offIdx = off1 ? 0 : 1;
     }
