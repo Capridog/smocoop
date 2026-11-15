@@ -3444,6 +3444,7 @@ static s32 BubbleSlot(const void* state) {
 //    bubble's position (start +0x50 = pos, horizontal +0x68 = 0, arc +0x48/+0x4c = 0,
 //    flightFrames = current step), so the vanilla end puts him right there and he drops down.
 constexpr float kBubbleHover = 90.0f;      // height above the rescuer's feet
+constexpr float kBubbleScale = 0.72f;      // TractorBubble size (3D World bubbles hug the character)
 constexpr float kBubbleSide = 150.0f;      // distance beside him
 constexpr float kBubbleTouch = 130.0f;
 constexpr float kBubbleCapTouch = 170.0f;  // Cappy (spinning hat) to bubble centre     // rescuer within this distance pops it
@@ -3471,6 +3472,8 @@ static sead::Vector3f BubbleHoverPoint(s32 slot, al::LiveActor* rescuer) {
     return {t.x + side.x / len * kBubbleSide, t.y + kBubbleHover, t.z + side.z / len * kBubbleSide};
 }
 
+extern void AlSetScale(al::LiveActor*, const sead::Vector3f&) asm(
+    "_ZN2al8setScaleEPNS_9LiveActorERKN4sead7Vector3IfEE");
 HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
     static void Callback(void* state) {
         auto* nerveUser = reinterpret_cast<al::IUseNerve*>(state);
@@ -3501,6 +3504,14 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
         // 3D World bubbles don't spin: the recovery state turns the player by +0x7c full turns
         // (eased over +0x78 frames, PlayerStateRecoveryDead::exeRecovery 0x579884). No turns.
         coop::SetField<float>(state, 0x7c, 0.0f);
+        // 3D World bubbles are about the size of the character: shrink the game's TractorBubble
+        // (PlayerRecoverySafetyPoint+0x28, created in its ctor 0x460390) for co-op bubbles.
+        if (auto* sp = coop::Field<void*>(state, smo100::RecoveryDead_safetyPoint)) {
+            if (auto* bubble = coop::Field<al::LiveActor*>(sp, 0x28)) {
+                sead::Vector3f sc = {kBubbleScale, kBubbleScale, kBubbleScale};
+                AlSetScale(bubble, sc);
+            }
+        }
 
         if (first) {
             sead::Vector3f spot = coop::FindSpotBeside(rescuer);
@@ -3520,6 +3531,7 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
 
         const sead::Vector3f& pos = al::getTrans(actor);
         sead::Vector3f goal = BubbleHoverPoint(slot, rescuer);
+        goal.y += 18.0f * __builtin_sinf((float)al::getNerveStep(nerveUser) * 0.07f);  // gentle bob
         if (coop::GameIsPlayer2DEarly(rescuer)) {
             // 8-bit wall: the bubble stays in front of the wall (camera side) so it never passes
             // through it, and only comes close to the wall plane as it reaches the rescuer.
