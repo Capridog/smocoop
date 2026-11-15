@@ -4134,6 +4134,16 @@ HOOK_DEFINE_TRAMPOLINE(CameraTargetHook) {
         Orig(target, out);
         using namespace coop::cam;
         if (!Active()) { gShare = 0.0f; return; }
+        // only Mario's own camera target (ActorCameraTarget::mActor at +0x10) is moved
+        auto* owner = coop::Field<const al::LiveActor*>(target, 0x10);
+        if (owner != coop::gP1) {
+            static const void* sLogged = nullptr;
+            if (sLogged != target) {
+                sLogged = target;
+                COOP_LOG("Camera: target of %s in use", owner == coop::gP2 ? "P2" : "another actor");
+            }
+            return;
+        }
         sead::Vector3f d;
         Separation(&d);
         // together: look at the midpoint; split up: look at the leader (switches in ~0.5 s)
@@ -4158,6 +4168,18 @@ HOOK_DEFINE_TRAMPOLINE(MakeLookAtHook) {
             want = 1.0f + (kZoomMax - 1.0f) * Clamp01((sep - kZoomStart) / (kZoomFull - kZoomStart));
         }
         gZoom += (want - gZoom) * kLerp;
+        if (gWallFocus >= 0) {
+            static s32 sTick = 0;
+            if (++sTick >= 45) {
+                sTick = 0;
+                auto lp = coop::Field<sead::Vector3f>(lookAt, smo100::LookAtCamera_pos);
+                auto la = coop::Field<sead::Vector3f>(lookAt, smo100::LookAtCamera_at);
+                float dx = lp.x - la.x, dy = lp.y - la.y, dz = lp.z - la.z;
+                const sead::Vector3f& t = al::getTrans(coop::gP1);
+                COOP_LOG("Camera (2D) diag: dist %.0f at (%.0f,%.0f,%.0f) P1 (%.0f,%.0f,%.0f) share %.2f zoom %.2f poser %p",
+                         __builtin_sqrtf(dx * dx + dy * dy + dz * dz), la.x, la.y, la.z, t.x, t.y, t.z, gShare, gZoom, poser);
+            }
+        }
         if (gZoom < 1.001f) return;
         auto pos = coop::Field<sead::Vector3f>(lookAt, smo100::LookAtCamera_pos);
         auto at = coop::Field<sead::Vector3f>(lookAt, smo100::LookAtCamera_at);
