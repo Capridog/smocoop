@@ -220,6 +220,7 @@ static void RequestBubble(s32 i, const char* why) {
 // goes to its Dead nerve when PlayerFunction::isPlayerDeadStatus is true at appear, Ghidra
 // 0x469750 / exeDead 0x469e10), then he comes back in a bubble.
 static s32 gDying[2] = {0, 0};  // frames since the fatal hit (0 = not dying)
+static bool gRespawnAbove[2] = {false, false};  // after a death the bubble floats in from above
 constexpr s32 kDeathFrames = 150;  // ~2.5 s from going down to coming back (every kind of death)
 // Pits / quicksand / lava (the game's own "recover at the safety point" path): the brother stays
 // down, hidden where he went under, for the same time before his bubble.
@@ -245,6 +246,7 @@ static void UpdateDying() {
         if (++gDying[i] >= kDeathFrames) {
             gDying[i] = 0;
             gBubbleBusy[i] = 0;
+            gRespawnAbove[i] = true;
             RequestBubble(i, "after the death animation");
         }
     }
@@ -272,6 +274,7 @@ static void UpdateDying() {
                 gP2Hp = kP2MaxHp;
                 if (void* k = Field<void*>(p, smo100::PlayerActorHakoniwa_damageKeeper)) SetField<s32>(k, 0x24, gP2Hp);
             }
+            gRespawnAbove[i] = true;
             RequestBubble(i, "after going down");
         }
     }
@@ -3334,9 +3337,20 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
                     // (on the wall too if his brother is on it).
                     coop::gForcedRecovery[idx] = 0;
                     coop::gBubbleBusy[idx] = 60;
+                    coop::gRespawnAbove[idx] = false;
                     if (coop::GameIsPlayer2DEarly(to)) coop::echo::Copy2D(to, actor);
                     coop::PlaceBeside(actor, to, "2D section: no bubble");
                     return Orig(self);
+                }
+                if (coop::gRespawnAbove[idx]) {
+                    // 3D World: after a death the bubble comes in from above the other brother
+                    // (on screen), not from wherever he died
+                    coop::gRespawnAbove[idx] = false;
+                    sead::Vector3f top = al::getTrans(to);
+                    top.y += 600.0f;
+                    al::resetPosition(actor, top);
+                    al::setVelocityZero(actor);
+                    coop::gIgnoreJumps = 10;
                 }
                 coop::StartBubbleTo(actor, to, idx);
                 return true;
@@ -3484,6 +3498,9 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
 
         Orig(state);
         if (rescuer == nullptr || actor == nullptr) return;
+        // 3D World bubbles don't spin: the recovery state turns the player by +0x7c full turns
+        // (eased over +0x78 frames, PlayerStateRecoveryDead::exeRecovery 0x579884). No turns.
+        coop::SetField<float>(state, 0x7c, 0.0f);
 
         if (first) {
             sead::Vector3f spot = coop::FindSpotBeside(rescuer);
