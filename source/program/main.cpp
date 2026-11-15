@@ -1198,6 +1198,22 @@ HOOK_DEFINE_TRAMPOLINE(CapStartHackHook) {
     }
 };
 
+// Shared camera, steered by both: ProjectCameraInput::calcInputStick (Ghidra 0x1ced24) only reads
+// Mario's camera stick. Add Luigi's right stick on top (3D World: either player turns the camera).
+extern const sead::Vector2f& AlGetRightStick(s32 port) asm("_ZN2al13getRightStickEi");
+HOOK_DEFINE_TRAMPOLINE(CameraStickHook) {
+    static void Callback(const void* self, sead::Vector2f* out) {
+        Orig(self, out);
+        if (out == nullptr || coop::gP2 == nullptr || coop::gP2Port < 0 || al::isDead(coop::gP2)) return;
+        const sead::Vector2f& r = AlGetRightStick(coop::gP2Port);
+        if (r.x * r.x + r.y * r.y < 0.15f * 0.15f) return;  // dead zone
+        float x = out->x + r.x, y = out->y + r.y;
+        float len = __builtin_sqrtf(x * x + y * y);
+        if (len > 1.0f) { x /= len; y /= len; }
+        out->x = x; out->y = y;
+    }
+};
+
 // Earlier still: the cap's touch on an enemy the other brother is capturing (attackSensor /
 // attackSpin are where HackCap::prepareLockOn starts the lock-on, Ghidra 0x5076fc / 0x4fbb10).
 // Ignoring the touch lets the cap fly on instead of sitting on the enemy first.
@@ -4357,6 +4373,7 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(rs_requestStartDemoWithPlayer, rs_requestStartDemoWithPlayer_bytes) &&
               CheckBytes(HackCap_sendMsgStartHack, HackCap_sendMsgStartHack_bytes) &&
               CheckBytes(HackCap_attackSensor, HackCap_attackSensor_bytes) &&
+              CheckBytes(ProjectCameraInput_calcInputStick, ProjectCameraInput_calcInputStick_bytes) &&
               CheckBytes(PlayerFunction_isPlayerDeadStatus, PlayerFunction_isPlayerDeadStatus_bytes) &&
               CheckBytes(DokanPuppetController_exeIn, DokanPuppetController_exeIn_bytes) &&
               CheckBytes(DokanPuppetController_exeDirectIn, DokanPuppetController_exeDirectIn_bytes) &&
@@ -4487,6 +4504,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     DokanOutSeHook::InstallAtOffset(DokanPuppetController_exeOut);
     CheckMissHook::InstallAtOffset(StageSceneStateMiss_checkMiss);
     CapAttackSensorHook::InstallAtOffset(HackCap_attackSensor);
+    CameraStickHook::InstallAtOffset(ProjectCameraInput_calcInputStick);
     CapAttackSpinHook::InstallAtOffset(HackCap_attackSpin);
     ShopAppearHook::InstallAtOffset(ShopStateInShop_appear);
     ShopLoadTextureHook::InstallAtOffset(ShopLayoutInfo_loadTexture);
