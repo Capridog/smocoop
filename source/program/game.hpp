@@ -257,6 +257,8 @@ constexpr ptrdiff_t Dokan_attackSensor = 0x2576ec;
 constexpr u64 Dokan_attackSensor_bytes = 0xf90023f5d101c3ffULL;
 constexpr ptrdiff_t DokanStageChange_attackSensor = 0x25daf4;
 constexpr u64 DokanStageChange_attackSensor_bytes = 0xf90023f5d101c3ffULL;
+constexpr ptrdiff_t DokanMaze_attackSensor = 0x259928;
+constexpr u64 DokanMaze_attackSensor_bytes = 0xf90023f5d101c3ffULL;
 constexpr ptrdiff_t CounterLifeCtrl_ctor = 0x1e5bd0;
 constexpr u64 CounterLifeCtrl_ctor_bytes = 0xa90157f6d10103ffULL;
 // Resource loading (Luigi for P2). Verified in Ghidra: callers PlayerFunction::initMarioModelActor

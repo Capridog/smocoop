@@ -35,6 +35,7 @@ static s32 gP2Hp = kP2MaxHp;
 static bool gP2RespawnPending = false;
 static bool gGameOver = false;      // both brothers down: real death in progress
 static bool gForceP1Death = false;  // send P1 into the vanilla death sequence next frame
+static bool gCamReset = false;      // a cutscene ended: the camera starts shared again
 static bool gToucherIsP2 = false;   // a pipe is processing P2's touch right now
 
 // Wardrobe for P2. P2's outfit lives here (not in the save file); empty = same as P1.
@@ -1182,6 +1183,7 @@ HOOK_DEFINE_TRAMPOLINE(DemoEndHook) {
             RsForcePutOnDemoCap(coop::gP2);
             COOP_LOG("Scene end: Luigi's cap put back on");
         }
+        coop::gCamReset = true;
         COOP_LOG("Scene end%s%s", coop::cut::gRide ? " (Luigi was riding)" : "", coop::cut::gHidden ? " (showing hidden brother)" : "");
         if (coop::cut::gRide) {
             coop::cut::gRide = false;
@@ -3415,6 +3417,15 @@ HOOK_DEFINE_TRAMPOLINE(DokanAttackHook) {
         coop::gToucherIsP2 = false;
     }
 };
+// 8-bit wall pipes are DokanMaze (same attackSensor logic as Dokan): Luigi could not enter them.
+HOOK_DEFINE_TRAMPOLINE(DokanMazeAttackHook) {
+    static void Callback(void* self, al::HitSensor* own, al::HitSensor* other) {
+        coop::gToucherIsP2 = coop::gP2 != nullptr && other != nullptr &&
+                             al::getSensorHost(other) == coop::gP2;
+        Orig(self, own, other);
+        coop::gToucherIsP2 = false;
+    }
+};
 HOOK_DEFINE_TRAMPOLINE(DokanStageChangeAttackHook) {
     static void Callback(void* self, al::HitSensor* own, al::HitSensor* other) {
         coop::gToucherIsP2 = coop::gP2 != nullptr && other != nullptr &&
@@ -3920,6 +3931,7 @@ static bool gHaveMid2D = false;
 static s32 g2DSwitchCool = 0;
 static s32 gWallFocus = -1;   // on an 8-bit wall: the one brother the camera looks at (-1 = not on a wall)
 static s32 gFocus2D = 0;
+static s32 gOutFocus = -1;     // the only brother still playing (other one down / in a bubble)
 static float gFull2D = -1.0f;   // full 3D distance while both are on a wall (else -1)
 
 static sead::Vector3f FocusPos(al::LiveActor* player, al::LiveActor* hack) {
@@ -4040,6 +4052,13 @@ static void Update() {
         }
     }
 
+    if (coop::gCamReset) {
+        // after a cutscene (a boss fight starting, a Moon, ...) nobody is "ahead" yet
+        coop::gCamReset = false;
+        if (gLeader >= 0) COOP_LOG("Camera: cutscene over, sharing view again");
+        gLeader = -1;
+        gMoveP1 = gMoveP2 = 0.0f;
+    }
     sead::Vector3f d;
     float sep = Separation(&d);
     // 8-bit wall sections (3D World): the camera goes with whoever is ahead along the course.
@@ -4100,13 +4119,31 @@ static void Update() {
             gWallFocus = -1;
         }
     }
+    // 3D World: the camera stays with the brother who is still playing. One who is going down
+    // (pit / quicksand fall, death animation) or floating in a bubble is never followed.
+    {
+        auto out = [](s32 i) {
+            return coop::gDying[i] > 0 || coop::gDown[i] > 0 || coop::gBubbleRequest[i] ||
+                   coop::gBubbleBusy[i] > 60;
+        };
+        bool o1 = out(0), o2 = out(1);
+        if (o1 != o2) {
+            s32 keep = o1 ? 1 : 0;
+            if (gLeader >= 0 && gLeader != keep) gLeader = keep;
+            if (gWallFocus >= 0) { gWallFocus = keep; gFocus2D = keep; }
+            gOutFocus = keep;
+        } else {
+            gOutFocus = -1;
+        }
+    }
     gFull2D = -1.0f;
     // walls go up as well as sideways (the round tower): with either brother on a wall, use the
     // full distance for the left-behind rule below
     if (coop::GameIsPlayer2DEarly(coop::gP1) || coop::GameIsPlayer2DEarly(coop::gP2)) gFull2D = Dist(p1, p2);
     if (both2D) {
     } else if (gLeader < 0 && sep > kLeaderSep) {
-        gLeader = gMoveP2 > gMoveP1 ? 1 : 0;
+        // the one who went off; when it isn't clear (both moving about the same), Mario
+        gLeader = gMoveP2 > gMoveP1 * 1.3f ? 1 : 0;
         COOP_LOG("Camera: brothers split up, following P%d", gLeader + 1);
     } else if (gLeader >= 0 && sep < kLeaderRelease) {
         gLeader = -1;
@@ -4167,6 +4204,7 @@ HOOK_DEFINE_TRAMPOLINE(CameraTargetHook) {
         // together: look at the midpoint; split up: look at the leader (switches in ~0.5 s)
         float want = gLeader < 0 ? 0.5f : (gLeader == 1 ? 1.0f : 0.0f);
         if (gWallFocus >= 0) want = gWallFocus == 1 ? 1.0f : 0.0f;
+        if (gOutFocus >= 0) want = gOutFocus == 1 ? 1.0f : 0.0f;
         if (coop::echo::Active()) want = coop::echo::LeaderIdx() == 1 ? 1.0f : 0.0f;
         gShare += (want - gShare) * kShareLerp;
         out->x += d.x * gShare;
@@ -4711,6 +4749,7 @@ extern "C" void exl_main(void* x0, void* x1) {
               CheckBytes(GameDataFunction_isPlayerHitPointMax, GameDataFunction_isPlayerHitPointMax_bytes) &&
               CheckBytes(Dokan_attackSensor, Dokan_attackSensor_bytes) &&
               CheckBytes(DokanStageChange_attackSensor, DokanStageChange_attackSensor_bytes) &&
+              CheckBytes(DokanMaze_attackSensor, DokanMaze_attackSensor_bytes) &&
               CheckBytes(CounterLifeCtrl_ctor, CounterLifeCtrl_ctor_bytes) &&
               CheckBytes(al_findOrCreateActorResource, al_findOrCreateActorResource_bytes) &&
               CheckBytes(al_findOrCreateActorResourceWithAnimResource,
@@ -4849,6 +4888,7 @@ extern "C" void exl_main(void* x0, void* x1) {
     HitPointMaxHook::InstallAtOffset(GameDataFunction_isPlayerHitPointMax);
     DokanAttackHook::InstallAtOffset(Dokan_attackSensor);
     DokanStageChangeAttackHook::InstallAtOffset(DokanStageChange_attackSensor);
+    DokanMazeAttackHook::InstallAtOffset(DokanMaze_attackSensor);
     CounterLifeCtrlCtorHook::InstallAtOffset(CounterLifeCtrl_ctor);
     FindOrCreateActorResourceHook::InstallAtOffset(al_findOrCreateActorResource);
     FindOrCreateActorResourceAnimHook::InstallAtOffset(al_findOrCreateActorResourceWithAnimResource);
