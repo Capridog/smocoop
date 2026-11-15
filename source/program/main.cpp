@@ -3879,6 +3879,11 @@ static float gMoveP1 = 0.0f, gMoveP2 = 0.0f;
 static sead::Vector3f gPrevP1 = {}, gPrevP2 = {};
 static bool gHavePrev = false;
 static s32 gLeader = -1;  // -1 none, 0 = P1, 1 = P2
+constexpr float k2DLeaderSep = 700.0f;      // on a wall: pick the brother ahead past this
+constexpr float k2DLeaderRelease = 450.0f;
+static sead::Vector3f gCourse = {};          // smoothed travel direction on the wall
+static sead::Vector3f gPrevMid2D = {};
+static bool gHaveMid2D = false;
 
 static sead::Vector3f FocusPos(al::LiveActor* player, al::LiveActor* hack) {
     return al::getTrans(hack ? hack : player);
@@ -3986,7 +3991,45 @@ static void Update() {
 
     sead::Vector3f d;
     float sep = Separation(&d);
-    if (gLeader < 0 && sep > kLeaderSep) {
+    // 8-bit wall sections (3D World): the camera goes with whoever is ahead along the course.
+    // "Ahead" = further along the direction the pair has been travelling on the wall (smoothed
+    // movement of their midpoint, so it works for sideways and upward scrolling sections).
+    bool both2D = coop::GameIsPlayer2DEarly(coop::gP1) && coop::GameIsPlayer2DEarly(coop::gP2);
+    if (both2D) {
+        sead::Vector3f mid = {(p1.x + p2.x) * 0.5f, (p1.y + p2.y) * 0.5f, (p1.z + p2.z) * 0.5f};
+        if (gHaveMid2D) {
+            sead::Vector3f mv = {mid.x - gPrevMid2D.x, mid.y - gPrevMid2D.y, mid.z - gPrevMid2D.z};
+            if (mv.x * mv.x + mv.y * mv.y + mv.z * mv.z < 200.0f * 200.0f) {
+                gCourse.x += (mv.x - gCourse.x) * 0.02f;
+                gCourse.y += (mv.y * 0.5f - gCourse.y) * 0.02f;  // falls count less than progress
+                gCourse.z += (mv.z - gCourse.z) * 0.02f;
+            }
+        }
+        gPrevMid2D = mid; gHaveMid2D = true;
+        float full = __builtin_sqrtf((p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y) +
+                                     (p2.z - p1.z) * (p2.z - p1.z));
+        float ahead = (p2.x - p1.x) * gCourse.x + (p2.y - p1.y) * gCourse.y + (p2.z - p1.z) * gCourse.z;
+        float cl = __builtin_sqrtf(gCourse.x * gCourse.x + gCourse.y * gCourse.y + gCourse.z * gCourse.z);
+        if (cl > 0.01f) ahead /= cl;
+        s32 front = ahead > 0.0f ? 1 : 0;
+        if (cl <= 0.01f) front = gLeader >= 0 ? gLeader : (gMoveP2 > gMoveP1 ? 1 : 0);  // no course yet
+        bool clearLead = ahead > 300.0f || ahead < -300.0f;  // a clear lead before switching
+        if (gLeader < 0 && full > k2DLeaderSep) {
+            gLeader = front;
+            COOP_LOG("Camera (2D): following P%d, who is ahead", gLeader + 1);
+        } else if (gLeader >= 0 && full < k2DLeaderRelease) {
+            gLeader = -1;
+            COOP_LOG("Camera (2D): brothers back together, sharing view");
+        } else if (gLeader >= 0 && gLeader != front && full > k2DLeaderSep && clearLead) {
+            gLeader = front;
+            COOP_LOG("Camera (2D): P%d took the lead", gLeader + 1);
+        }
+    } else {
+        gHaveMid2D = false;
+        gCourse = {0.0f, 0.0f, 0.0f};
+    }
+    if (both2D) {
+    } else if (gLeader < 0 && sep > kLeaderSep) {
         gLeader = gMoveP2 > gMoveP1 ? 1 : 0;
         COOP_LOG("Camera: brothers split up, following P%d", gLeader + 1);
     } else if (gLeader >= 0 && sep < kLeaderRelease) {
