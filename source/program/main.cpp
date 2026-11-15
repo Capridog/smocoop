@@ -4228,6 +4228,7 @@ static void Update() {
 // beside him in 3D; outside the 2D area his dimension keeper switches him back to 3D. Pipe exits
 // are left to the pipe follow (echo).
 extern bool GameIsPlayer2D(const al::LiveActor*) asm("_ZN2rs10isPlayer2DEPKN2al9LiveActorE");
+extern void DimKeeperInvalidate(void*) asm("_ZN20ActorDimensionKeeper10invalidateEv");
 namespace coop::dim {
 static bool gWas2D[2] = {false, false};
 static s32 gTimer = 0;
@@ -4284,7 +4285,7 @@ static void Update() {
             coop::cam::gBubbleCooldown = 30;  // no off-screen rule pulling him back into the wall
             s32 o = 1 - i;
             bool otherFree = gDying[o] == 0 && gDown[o] == 0 && !gBubbleRequest[o] && gBubbleBusy[o] <= 60;
-            if (++gExitWait[i] >= 30 && otherFree && !coop::echo::Active() && gTimer == 0 && gRetry == 0) {
+            if (++gExitWait[i] >= 1 && otherFree && !coop::echo::Active() && gTimer == 0 && gRetry == 0) {
                 gLeader = i;
                 gTimer = 1;
                 gExitWait[i] = 0;
@@ -4298,26 +4299,39 @@ static void Update() {
     if (gTimer > 0 && --gTimer == 0 && gLeader >= 0) {
         s32 f = 1 - gLeader;
         if (now[f] && !now[gLeader]) {
-            // A spot beside him can still be inside the 2D area (he just stepped out of its
-            // edge): use exactly where he stands, which is outside it, and drop any 2D keep.
             al::LiveActor* who = PlayerAt(f);
-            al::LiveActor* lead = PlayerAt(gLeader);
-            coop::echo::Force3D(who);
-            sead::Vector3f dst = al::getTrans(lead);
-            dst.y += 5.0f;
-            al::resetPosition(who, dst);
-            al::setVelocityZero(who);
-            gIgnoreJumps = 3;
+            if (gRetryCount < 3) {
+                // Jump out of the wall from where he is, the game's own way: drop his 2D state
+                // (ActorDimensionKeeper::invalidate, what the player's dimension update does when
+                // he leaves a 2D area; the model change then pushes him out of the wall and
+                // restores 3D gravity) and start a jump.
+                if (void* dim = Field<void*>(who, 0x150)) DimKeeperInvalidate(dim);
+                al::setNerve(reinterpret_cast<al::IUseNerve*>(who),
+                             reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() +
+                                                                smo100::NrvPlayerJump));
+                gIgnoreJumps = 3;
+                const sead::Vector3f& t = al::getTrans(who);
+                COOP_LOG("2D: P%d jumps out of the wall with P%d at (%.0f, %.0f, %.0f)", f + 1, gLeader + 1,
+                         t.x, t.y, t.z);
+            } else {
+                // last resort (he never left the wall): put him beside his brother
+                al::LiveActor* lead = PlayerAt(gLeader);
+                coop::echo::Force3D(who);
+                sead::Vector3f dst = al::getTrans(lead);
+                dst.y += 5.0f;
+                al::resetPosition(who, dst);
+                al::setVelocityZero(who);
+                gIgnoreJumps = 3;
+                COOP_LOG("2D: P%d still stuck in the wall, placed beside P%d", f + 1, gLeader + 1);
+            }
             gRetry = 20;
             gRetryLeader = gLeader;
-            COOP_LOG("2D: P%d brought out to P%d at (%.0f, %.0f, %.0f)", f + 1, gLeader + 1, dst.x, dst.y,
-                     dst.z);
         }
         gLeader = -1;
     }
     if (gRetry > 0 && --gRetry == 0 && gRetryLeader >= 0) {
         s32 f = 1 - gRetryLeader;
-        if (now[f] && !now[gRetryLeader] && gRetryCount < 5 && gBubbleBusy[f] <= 60) {
+        if (now[f] && !now[gRetryLeader] && gRetryCount < 4 && gBubbleBusy[f] <= 60) {
             gRetryCount++;
             gLeader = gRetryLeader;
             gTimer = 1;  // try again next frame
