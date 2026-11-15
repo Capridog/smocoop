@@ -3900,6 +3900,8 @@ static sead::Vector3f gCourse = {};          // smoothed travel direction on the
 static sead::Vector3f gPrevMid2D = {};
 static bool gHaveMid2D = false;
 static s32 g2DSwitchCool = 0;
+static s32 gWallFocus = -1;   // on an 8-bit wall: the one brother the camera looks at (-1 = not on a wall)
+static s32 gFocus2D = 0;
 static float gFull2D = -1.0f;   // full 3D distance while both are on a wall (else -1)
 
 static sead::Vector3f FocusPos(al::LiveActor* player, al::LiveActor* hack) {
@@ -3946,7 +3948,7 @@ static bool IsOffScreen(al::LiveActor* actor) {
     return false;
 }
 static void Reset() {
-    gZoom = 1.0f; gShare = 0.0f; gMoveP1 = gMoveP2 = 0.0f; gHavePrev = false; gLeader = -1;
+    gWallFocus = -1; gZoom = 1.0f; gShare = 0.0f; gMoveP1 = gMoveP2 = 0.0f; gHavePrev = false; gLeader = -1;
     gFarFrames = 0; gBubbleCooldown = 0;
     gHaveRaw = false; gWarpFollow = -1; gWarpWait = 0;
     coop::gForcedRecovery[0] = coop::gForcedRecovery[1] = 0;
@@ -4065,6 +4067,21 @@ static void Update() {
         gHaveMid2D = false;
         gCourse = {0.0f, 0.0f, 0.0f};
     }
+    // 8-bit walls have their own fixed camera rail (the round tower is circled by it): the camera
+    // always looks at exactly one brother there (the one ahead), never at a point between them
+    // (inside the tower) and without our zoom-out, so the game's fixed angle is kept.
+    {
+        bool w1 = coop::GameIsPlayer2DEarly(coop::gP1), w2 = coop::GameIsPlayer2DEarly(coop::gP2);
+        if (both2D) {
+            if (gLeader >= 0) gFocus2D = gLeader;
+            gWallFocus = gFocus2D;
+        } else if (w1 || w2) {
+            gWallFocus = w1 ? 0 : 1;
+            gFocus2D = gWallFocus;
+        } else {
+            gWallFocus = -1;
+        }
+    }
     gFull2D = -1.0f;
     // walls go up as well as sideways (the round tower): with either brother on a wall, use the
     // full distance for the left-behind rule below
@@ -4121,6 +4138,7 @@ HOOK_DEFINE_TRAMPOLINE(CameraTargetHook) {
         Separation(&d);
         // together: look at the midpoint; split up: look at the leader (switches in ~0.5 s)
         float want = gLeader < 0 ? 0.5f : (gLeader == 1 ? 1.0f : 0.0f);
+        if (gWallFocus >= 0) want = gWallFocus == 1 ? 1.0f : 0.0f;
         if (coop::echo::Active()) want = coop::echo::LeaderIdx() == 1 ? 1.0f : 0.0f;
         gShare += (want - gShare) * kShareLerp;
         out->x += d.x * gShare;
@@ -4134,7 +4152,7 @@ HOOK_DEFINE_TRAMPOLINE(MakeLookAtHook) {
         Orig(poser, lookAt);
         using namespace coop::cam;
         float want = 1.0f;
-        if (Active()) {
+        if (Active() && gWallFocus < 0) {
             sead::Vector3f d;
             float sep = Separation(&d);
             want = 1.0f + (kZoomMax - 1.0f) * Clamp01((sep - kZoomStart) / (kZoomFull - kZoomStart));
