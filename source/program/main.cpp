@@ -1523,6 +1523,7 @@ extern void AlSetActionFrame(al::LiveActor*, float) asm("_ZN2al14setActionFrameE
 extern void AlStartAction(al::LiveActor*, const char*) asm("_ZN2al11startActionEPNS_9LiveActorEPKc");
 extern void AlCopyPose(al::LiveActor*, const al::LiveActor*) asm("_ZN2al8copyPoseEPNS_9LiveActorEPKS0_");
 extern void AlHideModelIfShow(al::LiveActor*) asm("_ZN2al15hideModelIfShowEPNS_9LiveActorE");
+extern void AlShowModelIfHide(al::LiveActor*) asm("_ZN2al15showModelIfHideEPNS_9LiveActorE");
 namespace coop::flag {
 constexpr const char* kFile = "sd:/OdysseyCoop/luigiflags.txt";
 struct Key { s32 x, y, z; };
@@ -1628,19 +1629,25 @@ static void CreateTwin(al::LiveActor* flag, const void* info) {
 static void SetOwner(al::LiveActor* flag, bool luigi) {
     // Like 3D World: whoever touches a flag first keeps it. The game only enters the Get nerve
     // on the first touch (CheckpointFlag+0x134 unset); later touches just make it wobble.
+    // A Luigi key remembered from another save/session must not colour a flag Mario takes now.
     Pair* p = PairOf(flag);
-    if (p != nullptr && p->luigi) return;
     if (p != nullptr) p->luigi = luigi;
     Key k = KeyOf(flag);
     s32 i = Find(k);
     if (luigi && i < 0 && gKeyN < 256) { gKeys[gKeyN++] = k; SaveKeys(); }
+    if (!luigi && i >= 0) { gKeys[i] = gKeys[--gKeyN]; SaveKeys(); }
     COOP_LOG("Checkpoint flag taken by %s", luigi ? "Luigi" : "Mario");
 }
 static void Update() {
     for (s32 i = 0; i < gPairN; i++) {
         Pair& p = gPairs[i];
         if (p.twin == nullptr) continue;
-        if (!p.luigi) continue;
+        // only a flag already taken in this save (CheckpointFlag::mIsGot, +0x134) wears Luigi's colours
+        bool got = *(reinterpret_cast<const u8*>(p.flag) + 0x134) != 0;
+        if (!p.luigi || !got) {
+            if (!al::isDead(p.twin)) { LiveActorMakeDead(p.twin); AlShowModelIfHide(p.flag); }
+            continue;
+        }
         if (al::isDead(p.flag)) { if (!al::isDead(p.twin)) LiveActorMakeDead(p.twin); continue; }
         if (al::isDead(p.twin)) LiveActorMakeAlive(p.twin);
         AlCopyPose(p.twin, p.flag);
