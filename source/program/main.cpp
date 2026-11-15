@@ -2861,6 +2861,11 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryRoutineHook) {
                 }
                 return;
             }
+            // The other brother is down too (bubble / dying / fallen): both down is a real death.
+            // (Letting the game's own recovery run here sent both brothers into bubbles chasing
+            // each other forever.)
+            coop::RequestGameOver(idx == 0 ? "P1 down while P2 is down" : "P2 down while P1 is down");
+            return;  // P1: the forced death runs from his next checkDeathArea
         }
         Orig(who, a, b, c, d, e);
     }
