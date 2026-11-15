@@ -3450,11 +3450,12 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
                 coop::gBubbleRequest[idx] = false;
                 al::LiveActor* to = idx == 0 ? coop::gP2 : coop::gP1;
                 RsShowDemoPlayer(actor);  // back from going down (no-op otherwise)
-                if (coop::GameIsPlayer2DEarly(actor)) {
-                    // He went down on an 8-bit wall: he leaves the wall (the game's own 2D->3D
-                    // switch) and comes back in a bubble like anywhere else. The bubble keeps in
-                    // front of the wall and pops onto the wall beside his brother if his brother
-                    // is still on it (RecoveryFlyHook / EndRecoveryHook).
+                if (coop::GameIsPlayer2DEarly(actor) && !coop::GameIsPlayer2DEarly(to)) {
+                    // He went down on an 8-bit wall while his brother is out in 3D: he leaves the
+                    // wall (the game's own 2D->3D switch) and floats to him in a bubble.
+                    // (With his brother still on the wall he stays a 2D player in his short bubble
+                    // beside him: the game's wall camera switches away as soon as a player is
+                    // not 2D, which was the zoom-in.)
                     if (void* dim = coop::Field<void*>(actor, 0x150)) DimKeeperInvalidateEarly(dim);
                     COOP_LOG("P%d leaves the wall for his bubble", idx + 1);
                 }
@@ -3476,8 +3477,8 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
                     const sead::Vector3f& cp = al::getCameraPos(camUser, 0);
                     if ((cp.x - top.x) * n.x + (cp.z - top.z) * n.z < 0.0f) { n.x = -n.x; n.z = -n.z; }
                     // behind him along the wall (the side he came from), slightly above, in front
-                    top.x += -fr.x * 110.0f + n.x * 60.0f;
-                    top.z += -fr.z * 110.0f + n.z * 60.0f;
+                    top.x += -fr.x * 110.0f;  // on the wall plane: he stays 2D
+                    top.z += -fr.z * 110.0f;
                     top.y += 90.0f;
                     al::resetPosition(actor, top);
                     al::setVelocityZero(actor);
@@ -3703,7 +3704,7 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
         const sead::Vector3f& pos = al::getTrans(actor);
         sead::Vector3f goal = BubbleHoverPoint(slot, rescuer);
         goal.y += 18.0f * __builtin_sinf((float)al::getNerveStep(nerveUser) * 0.07f);  // gentle bob
-        if (coop::GameIsPlayer2DEarly(rescuer)) {
+        if (coop::GameIsPlayer2DEarly(rescuer) && !coop::gWallBubble[slot]) {
             // 8-bit wall: the bubble stays in front of the wall (camera side) so it never passes
             // through it, and only comes close to the wall plane as it reaches the rescuer.
             sead::Vector3f fr;
