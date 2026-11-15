@@ -4238,6 +4238,17 @@ static s32 gRetryLeader = -1;
 static s32 gRetryCount = 0;
 static s32 gExit[2] = {0, 0};      // frames left to bring the other one out after P<i> left 2D
 static s32 gExitWait[2] = {0, 0};
+// Following the leader out (3D World): the other brother retraces the leader's last moves on the
+// wall a few frames behind him and jumps out of the wall where and when he did.
+struct HistEntry { sead::Vector3f pos; bool is2D; };
+constexpr s32 kHist = 256;
+constexpr s32 kTrailLag = 14;     // frames behind the leader
+constexpr s32 kTrailAfter = 26;   // frames of the leader's jump-out arc that are retraced
+static HistEntry gHist[2][kHist] = {};
+static u32 gHF = 0;               // history frame counter
+static u32 gExitFrame[2] = {0, 0};
+static s32 gTrailLead = -1;
+static u32 gTrailCur = 0, gTrailExit = 0;
 }  // namespace coop::dim
 namespace coop::dim {
 static void Update() {
@@ -4278,19 +4289,29 @@ static void Update() {
     // A brother who only left 2D by dying or going down does not count.
     for (s32 i = 0; i < 2; i++) {
         bool out = gDying[i] > 0 || gDown[i] > 0 || gBubbleRequest[i] || gBubbleBusy[i] > 60;
-        if (gWas2D[i] && !now[i] && !out) { gExit[i] = 60 * 12; }
+        if (gWas2D[i] && !now[i] && !out) { gExit[i] = 60 * 12; gExitFrame[i] = gHF; }
         if (now[i] || out || !now[1 - i]) gExit[i] = 0;  // back in, down, or the other is out too
         if (gExit[i] > 0) {
             gExit[i]--;
             coop::cam::gBubbleCooldown = 30;  // no off-screen rule pulling him back into the wall
             s32 o = 1 - i;
             bool otherFree = gDying[o] == 0 && gDown[o] == 0 && !gBubbleRequest[o] && gBubbleBusy[o] <= 60;
-            if (++gExitWait[i] >= 1 && otherFree && !coop::echo::Active() && gTimer == 0 && gRetry == 0) {
-                gLeader = i;
-                gTimer = 1;
+            if (++gExitWait[i] >= 1 && otherFree && !coop::echo::Active() && gTimer == 0 && gRetry == 0 &&
+                gTrailLead < 0) {
                 gExitWait[i] = 0;
                 gExit[i] = 0;
-                COOP_LOG("2D: P%d left the wall section, bringing P%d out", i + 1, 2 - i);
+                u32 since = gHF - gExitFrame[i];
+                if (since + kTrailLag + 8 < (u32)kHist) {
+                    // retrace the leader's path from a moment before he left the wall
+                    gTrailLead = i;
+                    gTrailExit = gExitFrame[i];
+                    gTrailCur = gExitFrame[i] - kTrailLag;
+                    COOP_LOG("2D: P%d left the wall section, P%d follows him out", i + 1, 2 - i);
+                } else {
+                    gLeader = i;
+                    gTimer = 1;
+                    COOP_LOG("2D: P%d left the wall section, bringing P%d out", i + 1, 2 - i);
+                }
             }
         } else {
             gExitWait[i] = 0;
@@ -4341,10 +4362,45 @@ static void Update() {
             gRetryLeader = -1;
         }
     }
+    if (gTrailLead >= 0) {
+        s32 L = gTrailLead, f = 1 - L;
+        al::LiveActor* who = PlayerAt(f);
+        bool busy = who == nullptr || gDying[f] > 0 || gDown[f] > 0 || gBubbleRequest[f] || gBubbleBusy[f] > 60 ||
+                    coop::echo::Active() || HackActorOf(who) != nullptr;
+        if (busy || gTrailCur > gTrailExit + kTrailAfter || gHF - gTrailCur >= (u32)kHist - 1) {
+            if (!busy && who != nullptr && GameIsPlayer2D(who)) { gRetry = 20; gRetryLeader = L; }
+            gTrailLead = -1;
+        } else {
+            const HistEntry& h = gHist[L][gTrailCur % kHist];
+            const HistEntry& hn = gHist[L][(gTrailCur + 1) % kHist];
+            if (gTrailCur == gTrailExit) {
+                // where he left the wall: the game's own 2D->3D switch, and a jump
+                if (void* dim = Field<void*>(who, 0x150)) DimKeeperInvalidate(dim);
+                al::setNerve(reinterpret_cast<al::IUseNerve*>(who),
+                             reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() +
+                                                                smo100::NrvPlayerJump));
+                COOP_LOG("2D: P%d jumps out of the wall after P%d at (%.0f, %.0f, %.0f)", f + 1, L + 1,
+                         h.pos.x, h.pos.y, h.pos.z);
+            }
+            GameSetTrans(who, h.pos);
+            sead::Vector3f v = {hn.pos.x - h.pos.x, hn.pos.y - h.pos.y, hn.pos.z - h.pos.z};
+            if (gTrailCur + 1 >= gHF) v = {0.0f, 0.0f, 0.0f};
+            GameSetVelocity(who, v);
+            gIgnoreJumps = 3;
+            coop::cam::gBubbleCooldown = 30;
+            gTrailCur++;
+        }
+    }
+    for (s32 i = 0; i < 2; i++) {
+        al::LiveActor* p = PlayerAt(i);
+        gHist[i][gHF % kHist] = {p ? al::getTrans(p) : sead::Vector3f{0.0f, 0.0f, 0.0f}, now[i]};
+    }
+    gHF++;
     gWas2D[0] = now[0];
     gWas2D[1] = now[1];
 }
 static void Reset() {
+    gTrailLead = -1;
     gWas2D[0] = gWas2D[1] = false; gTimer = 0; gLeader = -1; gRetry = 0; gRetryLeader = -1; gRetryCount = 0;
     gExit[0] = gExit[1] = gExitWait[0] = gExitWait[1] = 0;
     gJoin2D[0] = gJoin2D[1] = 0;
