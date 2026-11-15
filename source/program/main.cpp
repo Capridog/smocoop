@@ -375,6 +375,7 @@ static void Reset();
 namespace coop::dim {
 static void Reset();
 static s32 gJoin2D[2] = {0, 0};  // frames left to make a popped brother 2D beside his brother
+static s32 gJoinGuard[2] = {0, 0};  // frames a popped brother is caught if he drops below the wall
 }  // namespace coop::dim
 namespace coop::text {
 static void Reset();
@@ -3644,6 +3645,13 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
             sead::Vector3f up1 = {0.0f, 1.0f, 0.0f};
             sp->setSafetyPoint(gBubblePopPos[slot], up1, nullptr);
             COOP_LOG("Bubble: P%d popped by P%d", slot + 1, 2 - slot);
+            if (gBubbleInto2D[slot] && rescuer != nullptr && coop::GameIsPlayer2DEarly(rescuer)) {
+                // onto the wall at once (not after landing): in 3D the 8-bit floors have no
+                // collision and he fell straight through them
+                coop::echo::Copy2D(rescuer, actor);
+                coop::dim::gJoin2D[slot] = 90;
+                coop::dim::gJoinGuard[slot] = 150;
+            }
             Orig(state);
             return;
         }
@@ -3747,12 +3755,14 @@ HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
                 if (fl > 0.001f) {
                     fr.x /= fl; fr.z /= fl;
                     along = (pos.x - r.x) * fr.x + (pos.z - r.z) * fr.z;
-                    if (along > 150.0f) along = 150.0f;
-                    if (along < -150.0f) along = -150.0f;
+                    if (along > 100.0f) along = 100.0f;
+                    if (along < -100.0f) along = -100.0f;
                 }
                 pp.x = r.x + fr.x * along;
                 pp.z = r.z + fr.z * along;
-                if (pp.y > r.y + 150.0f) pp.y = r.y + 150.0f;
+                // the 8-bit floors only exist in 2D: drop him at his brother's height, onto the
+                // floor his brother stands on, never above a gap
+                pp.y = r.y + 40.0f;
                 gBubbleInto2D[slot] = true;
             }
             gBubblePopPos[slot] = pp;
@@ -4325,6 +4335,29 @@ static void Update() {
     // A brother who dropped out of a bubble next to his brother on an 8-bit wall: keep giving him
     // his brother's 2D state (validate / snap) and his depth on the wall until the game has
     // actually switched him to 2D (a single copy at landing didn't always take).
+    // Safety net after a bubble popped onto a wall: if he still drops well below his brother's
+    // floor (out of the 2D area / through it), put him back on the wall beside his brother.
+    for (s32 i = 0; i < 2; i++) {
+        if (gJoinGuard[i] <= 0) continue;
+        gJoinGuard[i]--;
+        al::LiveActor* p = PlayerAt(i);
+        al::LiveActor* o = PlayerAt(1 - i);
+        if (p == nullptr || o == nullptr || !now[1 - i] || gDying[i] > 0 || gDown[i] > 0) { gJoinGuard[i] = 0; continue; }
+        if (gBubbleBusy[i] > 60) continue;  // still finishing the pop
+        const sead::Vector3f& pt = al::getTrans(p);
+        const sead::Vector3f& ot = al::getTrans(o);
+        bool falling = pt.y < ot.y - 400.0f && !now[i];
+        if (falling || al::isInDeathArea(p)) {
+            sead::Vector3f dst = {ot.x, ot.y + 40.0f, ot.z};
+            coop::echo::Copy2D(o, p);
+            al::resetPosition(p, dst);
+            al::setVelocityZero(p);
+            gIgnoreJumps = 3;
+            gJoin2D[i] = 60;
+            gJoinGuard[i] = 0;
+            COOP_LOG("2D: P%d fell through after his bubble, put back on the wall with P%d", i + 1, 2 - i);
+        }
+    }
     for (s32 i = 0; i < 2; i++) {
         if (gJoin2D[i] <= 0) continue;
         gJoin2D[i]--;
@@ -4469,6 +4502,7 @@ static void Reset() {
     gWas2D[0] = gWas2D[1] = false; gTimer = 0; gLeader = -1; gRetry = 0; gRetryLeader = -1; gRetryCount = 0;
     gExit[0] = gExit[1] = gExitWait[0] = gExitWait[1] = 0;
     gJoin2D[0] = gJoin2D[1] = 0;
+    gJoinGuard[0] = gJoinGuard[1] = 0;
 }
 }  // namespace coop::dim
 
