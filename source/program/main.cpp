@@ -233,6 +233,16 @@ static s32 gDeathEnd[2] = {0, 0};
 }  // namespace coop
 extern bool PlayerAnimatorIsAnimEnd(const void*) asm("_ZNK14PlayerAnimator9isAnimEndEv");
 namespace coop {
+static void RefillHearts(s32 i) {
+    al::LiveActor* p = PlayerAt(i);
+    if (p == nullptr) return;
+    if (i == 0) {
+        GameDataFunction::recoveryPlayerMax(p);
+    } else {
+        gP2Hp = kP2MaxHp;
+        if (void* k = Field<void*>(p, smo100::PlayerActorHakoniwa_damageKeeper)) SetField<s32>(k, 0x24, gP2Hp);
+    }
+}
 static bool DeathAnimEnded(al::LiveActor* p) {
     void* anim = p ? Field<void*>(p, 0x168) : nullptr;  // PlayerActorHakoniwa+0x168 PlayerAnimator
     return anim != nullptr && PlayerAnimatorIsAnimEnd(anim);
@@ -259,6 +269,7 @@ static void UpdateDying() {
         gDeathEnd[i] = animEnd ? gDeathEnd[i] + 1 : 0;
         if (gDeathEnd[i] >= 15 || gDying[i] >= 60 * 6) {
             COOP_LOG("P%d death animation over after %d frames", i + 1, gDying[i]);
+            RefillHearts(i);
             gDying[i] = 0;
             gDeathEnd[i] = 0;
             gBubbleBusy[i] = 0;
@@ -2782,6 +2793,7 @@ static bool IsP2Keeper(void* keeper) {
            coop::Field<al::LiveActor*>(keeper, 0x0) == coop::gP2;
 }
 
+namespace coop { static void LastDeathP2(void* a, void* b, void* c, void* d, void* e); }
 static void P2TakeHit(void* keeper, s32 damageType, bool fromRecovery) {
     coop::SetField<u8>(keeper, 0x10, 1);
     coop::SetField<s32>(keeper, 0x14, damageType);
@@ -2796,9 +2808,9 @@ static void P2TakeHit(void* keeper, s32 damageType, bool fromRecovery) {
             coop::gP2Hp = coop::kP2MaxHp;
             COOP_LOG("P2 out of hearts during recovery; refilled to %d", coop::gP2Hp);
         } else {
-            coop::gP2Hp = coop::kP2MaxHp;
+            // empty hearts while he is dying; refilled when he comes back (UpdateDying)
             if (coop::PartnerAvailable(1)) coop::StartDying(1, "out of hearts");
-            else coop::RequestGameOver("P2 out of hearts while P1 in a bubble");
+            else { coop::RequestGameOver("P2 out of hearts while P1 in a bubble"); coop::LastDeathP2(nullptr, nullptr, nullptr, nullptr, nullptr); }
         }
     }
 }
@@ -2814,7 +2826,9 @@ static bool TrySaveP1(void* keeper, s32 damageType, const char* why, bool startB
     if (!IsP1Keeper(keeper) || !P1OnLastHeart() || !coop::PartnerAvailable(0)) return false;
     coop::SetField<u8>(keeper, 0x10, 1);
     coop::SetField<s32>(keeper, 0x14, damageType);
-    GameDataFunction::recoveryPlayerMax(coop::gP1);
+    // hearts refill when he comes back in the bubble (UpdateDying), not while he is dying; he is
+    // kept on his last heart meanwhile (the hit itself is skipped) so the game doesn't judge him dead
+    if (!startBubble) GameDataFunction::recoveryPlayerMax(coop::gP1);
     if (startBubble) coop::StartDying(0, why);  // pits/quicksand: vanilla recovery already bubbles
     else COOP_LOG("P1 on last heart in a pit: refilled, game's own bubble takes him to P2");
     return true;
@@ -2822,6 +2836,12 @@ static bool TrySaveP1(void* keeper, s32 damageType, const char* why, bool startB
 
 HOOK_DEFINE_TRAMPOLINE(DamageHook) {
     static void Callback(void* keeper, s32 damageType) {
+        // already dying / down: no more hits (they would cut the death animation short)
+        {
+            al::LiveActor* a = keeper ? coop::Field<al::LiveActor*>(keeper, 0x0) : nullptr;
+            s32 k = a == nullptr ? -1 : (a == coop::gP1 ? 0 : (a == coop::gP2 ? 1 : -1));
+            if (k >= 0 && (coop::gDying[k] > 0 || coop::gDown[k] > 0)) return;
+        }
         if (coop::Field<u8>(keeper, 0x1c) == 0 && TrySaveP1(keeper, damageType, "out of hearts", true))
             return;
         if (!IsP2Keeper(keeper)) return Orig(keeper, damageType);
@@ -2875,8 +2895,6 @@ static void GoDown(s32 i, const char* why) {
     if (KeepsFalling(p)) { BeginDown(i, why); return; }
     COOP_LOG("P%d: not a fall (poison or similar): death animation", i + 1);
     if (gDying[i] > 0 || gDown[i] > 0) return;
-    if (i == 0) GameDataFunction::recoveryPlayerMax(p);
-    else { gP2Hp = kP2MaxHp; if (void* k = Field<void*>(p, smo100::PlayerActorHakoniwa_damageKeeper)) SetField<s32>(k, 0x24, gP2Hp); }
     StartDying(i, why);
     if (gDying[i] > 0) ForceDeathNerve(p);
 }
@@ -3413,8 +3431,18 @@ static s32 CoopBubbleIndexOfState(const void* state) {
     return -1;
 }
 
+extern void AlSetScale(al::LiveActor*, const sead::Vector3f&) asm(
+    "_ZN2al8setScaleEPNS_9LiveActorERKN4sead7Vector3IfEE");
+constexpr float kBubbleScale = 0.72f;  // TractorBubble size (3D World bubbles hug the character)
 HOOK_DEFINE_TRAMPOLINE(RecoveryStartHook) {
     static void Callback(void* state) {
+        // character-sized bubble from its very first frame (not only once it starts flying)
+        if (auto* sp = coop::Field<void*>(state, smo100::RecoveryDead_safetyPoint)) {
+            if (auto* bubble = coop::Field<al::LiveActor*>(sp, 0x28)) {
+                sead::Vector3f sc = {kBubbleScale, kBubbleScale, kBubbleScale};
+                AlSetScale(bubble, sc);
+            }
+        }
         if (al::isFirstStep(reinterpret_cast<al::IUseNerve*>(state))) {
             auto* a = coop::Field<al::LiveActor*>(state, smo100::ActorStateBase_actor);
             for (s32 i = 0; i < 2; i++)
@@ -3483,7 +3511,6 @@ static s32 BubbleSlot(const void* state) {
 //    bubble's position (start +0x50 = pos, horizontal +0x68 = 0, arc +0x48/+0x4c = 0,
 //    flightFrames = current step), so the vanilla end puts him right there and he drops down.
 constexpr float kBubbleHover = 90.0f;      // height above the rescuer's feet
-constexpr float kBubbleScale = 0.72f;      // TractorBubble size (3D World bubbles hug the character)
 constexpr float kBubbleSide = 150.0f;      // distance beside him
 constexpr float kBubbleTouch = 130.0f;
 constexpr float kBubbleCapTouch = 170.0f;  // Cappy (spinning hat) to bubble centre     // rescuer within this distance pops it
@@ -3511,8 +3538,6 @@ static sead::Vector3f BubbleHoverPoint(s32 slot, al::LiveActor* rescuer) {
     return {t.x + side.x / len * kBubbleSide, t.y + kBubbleHover, t.z + side.z / len * kBubbleSide};
 }
 
-extern void AlSetScale(al::LiveActor*, const sead::Vector3f&) asm(
-    "_ZN2al8setScaleEPNS_9LiveActorERKN4sead7Vector3IfEE");
 HOOK_DEFINE_TRAMPOLINE(RecoveryFlyHook) {
     static void Callback(void* state) {
         auto* nerveUser = reinterpret_cast<al::IUseNerve*>(state);
