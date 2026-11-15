@@ -228,6 +228,15 @@ static s32 gDown[2] = {0, 0};
 static sead::Vector3f gDownPos[2] = {};
 static bool gDownFall[2] = {false, false};  // safety point reads invalid: the game's death fall plays
 constexpr s32 kFallFrames = 50;
+constexpr s32 kFallDeathFrames = 110;  // the death fall + scream (DeadFall / vDeadFallDown)
+static s32 gDeathEnd[2] = {0, 0};
+}  // namespace coop
+extern bool PlayerAnimatorIsAnimEnd(const void*) asm("_ZNK14PlayerAnimator9isAnimEndEv");
+namespace coop {
+static bool DeathAnimEnded(al::LiveActor* p) {
+    void* anim = p ? Field<void*>(p, 0x168) : nullptr;  // PlayerActorHakoniwa+0x168 PlayerAnimator
+    return anim != nullptr && PlayerAnimatorIsAnimEnd(anim);
+}
 // gRecoveryRelease (declared above): our own calls to the recovery routine go through
 static void StartDying(s32 i, const char* why) {
     if (gDying[i] > 0 || gBubbleRequest[i] || gBubbleBusy[i] > 60) return;
@@ -243,8 +252,15 @@ static void UpdateDying() {
         if (gDying[i] <= 0) continue;
         if (PlayerAt(i) == nullptr) { gDying[i] = 0; continue; }
         if (gGameOver) continue;  // the stage restarts; he stays in his death animation
-        if (++gDying[i] >= kDeathFrames) {
+        // wait for the death animation to finish (PlayerAnimator::isAnimEnd, what exeDead itself
+        // waits for), then a short beat; never bubble before that (cap only if it never ends)
+        ++gDying[i];
+        bool animEnd = gDying[i] >= 20 && DeathAnimEnded(PlayerAt(i));
+        gDeathEnd[i] = animEnd ? gDeathEnd[i] + 1 : 0;
+        if (gDeathEnd[i] >= 15 || gDying[i] >= 60 * 6) {
+            COOP_LOG("P%d death animation over after %d frames", i + 1, gDying[i]);
             gDying[i] = 0;
+            gDeathEnd[i] = 0;
             gBubbleBusy[i] = 0;
             gRespawnAbove[i] = true;
             RequestBubble(i, "after the death animation");
@@ -264,7 +280,9 @@ static void UpdateDying() {
             al::setVelocityZero(p);
             al::resetPosition(p, gDownPos[i]);
         }
-        if (++gDown[i] >= kDeathFrames) {
+        ++gDown[i];
+        bool fallEnd = gDown[i] >= kFallDeathFrames && DeathAnimEnded(p);
+        if (fallEnd || gDown[i] >= kFallDeathFrames + 60) {
             gDown[i] = 0;
             gDownFall[i] = false;
             gBubbleBusy[i] = 0;
