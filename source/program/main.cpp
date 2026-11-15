@@ -221,13 +221,13 @@ static void RequestBubble(s32 i, const char* why) {
 // 0x469750 / exeDead 0x469e10), then he comes back in a bubble.
 static s32 gDying[2] = {0, 0};  // frames since the fatal hit (0 = not dying)
 static bool gRespawnAbove[2] = {false, false};  // after a death the bubble floats in from above
-constexpr s32 kDeathFrames = 150;  // ~2.5 s from going down to coming back (every kind of death)
+constexpr s32 kDeathFrames = 80;  // ~1.3 s from going down to the bubble (3D World pace)
 // Pits / quicksand / lava (the game's own "recover at the safety point" path): the brother stays
 // down, hidden where he went under, for the same time before his bubble.
 static s32 gDown[2] = {0, 0};
 static sead::Vector3f gDownPos[2] = {};
 static bool gDownFall[2] = {false, false};  // safety point reads invalid: the game's death fall plays
-constexpr s32 kFallFrames = 60;
+constexpr s32 kFallFrames = 50;
 // gRecoveryRelease (declared above): our own calls to the recovery routine go through
 static void StartDying(s32 i, const char* why) {
     if (gDying[i] > 0 || gBubbleRequest[i] || gBubbleBusy[i] > 60) return;
@@ -3449,8 +3449,8 @@ constexpr float kBubbleScale = 0.72f;      // TractorBubble size (3D World bubbl
 constexpr float kBubbleSide = 150.0f;      // distance beside him
 constexpr float kBubbleTouch = 130.0f;
 constexpr float kBubbleCapTouch = 170.0f;  // Cappy (spinning hat) to bubble centre     // rescuer within this distance pops it
-constexpr float kBubbleEase = 0.05f;       // fraction of the remaining way per frame
-constexpr float kBubbleMaxSpeed = 12.0f;   // units per frame near the rescuer
+constexpr float kBubbleEase = 0.08f;       // fraction of the remaining way per frame
+constexpr float kBubbleMaxSpeed = 18.0f;   // units per frame near the rescuer
 constexpr float kBubbleFarSpeed = 30.0f;   // when far away (catch-up)
 constexpr s32 kBubbleNoPopFrames = 30;
 static bool gBubblePop[2] = {false, false};
