@@ -1624,6 +1624,16 @@ static Pair* PairOf(const al::LiveActor* f) {
 // initActorWithArchiveName with the flag's own placement info, which gave a black screen in 2P.
 extern void AlInitChildActorNoPlacement(al::LiveActor*, const void*, const coop::luigi::SafeStr&, const char*) asm(
     "_ZN2al44initChildActorWithArchiveNameNoPlacementInfoEPNS_9LiveActorERKNS_13ActorInitInfoERKN4sead14SafeStringBaseIcEEPKc");
+extern float RsGetStageShineAnimFrame(const al::LiveActor*) asm("_ZN2rs22getStageShineAnimFrameEPKN2al9LiveActorE");
+extern void AlStartMclAnimAndSetFrameAndStop(al::LiveActor*, const char*, float) asm(
+    "_ZN2al30startMclAnimAndSetFrameAndStopEPNS_9LiveActorEPKcf");
+// The flag's pole and cloth colours come from its "Color" material animation, set per kingdom
+// (CheckpointFlag::init). The twin never got it, so it showed frame 0: yellow pole, washed-out cloth.
+static void SetTwinColor(al::LiveActor* flag, al::LiveActor* twin) {
+    float frame = RsGetStageShineAnimFrame(flag);
+    if (frame < 0.0f) frame = 0.0f;
+    AlStartMclAnimAndSetFrameAndStop(twin, "Color", frame);
+}
 static void CreateTwin(al::LiveActor* flag, const void* info) {
     // Flags can be placed before the players; build the twin whenever 2P mode is on.
     if (gPairN >= 64 || !coop::CoopModeOn(reinterpret_cast<const u8*>(flag) + 0x20)) return;
@@ -1668,7 +1678,7 @@ static void Update() {
             continue;
         }
         if (al::isDead(p.flag)) { if (!al::isDead(p.twin)) LiveActorMakeDead(p.twin); continue; }
-        if (al::isDead(p.twin)) LiveActorMakeAlive(p.twin);
+        if (al::isDead(p.twin)) { LiveActorMakeAlive(p.twin); SetTwinColor(p.flag, p.twin); }
         AlCopyPose(p.twin, p.flag);
         const char* a = AlGetActionName(p.flag);
         const char* b = AlGetActionName(p.twin);
