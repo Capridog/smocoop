@@ -3456,6 +3456,11 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
                     if (coop::GameIsPlayer2DEarly(to)) coop::echo::Copy2D(to, actor);
                     else coop::echo::Force3D(actor);  // he is out in 3D: come out of the wall to him
                     coop::PlaceBeside(actor, to, "2D section: no bubble");
+                    // Out of his death (the 2D death never ends on its own: its miss is blocked)
+                    // and back in play: start falling from the spot beside his brother.
+                    al::setNerve(reinterpret_cast<al::IUseNerve*>(actor),
+                                 reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() +
+                                                                    smo100::NrvPlayerFall));
                     return Orig(self);
                 }
                 if (coop::gRespawnAbove[idx]) {

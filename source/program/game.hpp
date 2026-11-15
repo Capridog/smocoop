@@ -251,6 +251,7 @@ constexpr ptrdiff_t PlayerActorHakoniwa_puppet = 0x178;
 constexpr ptrdiff_t PlayerActorHakoniwa_bindKeeper = 0x1f0;
 constexpr ptrdiff_t PlayerActorHakoniwa_input138 = 0x138;
 constexpr ptrdiff_t NrvPlayerBind = 0x1d789e0;
+constexpr ptrdiff_t NrvPlayerFall = 0x1d78910;  // exeFall 0x425228
 constexpr ptrdiff_t NrvPlayerJump = 0x1d78948;  // PlayerActorHakoniwa Jump nerve (execute -> exeJump 0x42405c)
 constexpr ptrdiff_t Dokan_attackSensor = 0x2576ec;
 constexpr u64 Dokan_attackSensor_bytes = 0xf90023f5d101c3ffULL;
