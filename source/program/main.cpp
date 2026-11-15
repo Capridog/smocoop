@@ -259,7 +259,8 @@ static void UpdateDying() {
         if (gDown[i] < kFallFrames) {
             gDownPos[i] = al::getTrans(p);
         } else {
-            if (gDown[i] == kFallFrames) RsHideDemoPlayer(p);
+            // (no hiding: he is already below the floor / under the sand, and the demo-hide
+            // was not undone in time, so the bubble arrived empty for a while)
             al::setVelocityZero(p);
             al::resetPosition(p, gDownPos[i]);
         }
@@ -3347,7 +3348,7 @@ HOOK_DEFINE_TRAMPOLINE(CheckDeathAreaHook) {
                     // (on screen), not from wherever he died
                     coop::gRespawnAbove[idx] = false;
                     sead::Vector3f top = al::getTrans(to);
-                    top.y += 600.0f;
+                    top.y += 300.0f;
                     al::resetPosition(actor, top);
                     al::setVelocityZero(actor);
                     coop::gIgnoreJumps = 10;
