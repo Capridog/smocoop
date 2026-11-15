@@ -210,6 +210,9 @@ static bool PartnerAvailable(s32 i) {
     if (other == nullptr || PlayerAt(i) == nullptr || gGameOver) return false;
     return !al::isDead(other) && gBubbleBusy[1 - i] <= 60;  // >60 = bubble in flight
 }
+// The other brother can't catch a bubble: he is in one (or about to be), going down, or dying.
+static bool PartnerOut(s32 i);
+
 static void RequestBubble(s32 i, const char* why) {
     if (gBubbleRequest[i] || gBubbleBusy[i] > 60) return;
     gBubbleRequest[i] = true;
@@ -258,6 +261,15 @@ static void StartDying(s32 i, const char* why) {
 }  // namespace coop
 extern void RsHideDemoPlayer(const al::LiveActor*) asm("_ZN2rs14hideDemoPlayerEPKN2al9LiveActorE");
 namespace coop {
+static void RequestGameOver(const char* why);
+static void GameOverFrom(s32 i, const char* why) {
+    COOP_LOG("P%d %s", i + 1, why);
+    RequestGameOver(i == 0 ? "P1 out while P2 can't catch him" : "P2 out while P1 can't catch him");
+}
+static bool PartnerOut(s32 i) {
+    s32 o = 1 - i;
+    return gBubbleRequest[o] || gBubbleBusy[o] > 60 || gDying[o] > 0 || gDown[o] > 0;
+}
 static void UpdateDying() {
     for (s32 i = 0; i < 2; i++) {
         if (gDying[i] <= 0) continue;
@@ -269,6 +281,7 @@ static void UpdateDying() {
         bool animEnd = gDying[i] >= 20 && DeathAnimEnded(PlayerAt(i));
         gDeathEnd[i] = animEnd ? gDeathEnd[i] + 1 : 0;
         if (gDeathEnd[i] >= 15 || gDying[i] >= 60 * 6) {
+            if (PartnerOut(i)) { GameOverFrom(i, "died while the other is in a bubble / down"); continue; }
             COOP_LOG("P%d death animation over after %d frames", i + 1, gDying[i]);
             RefillHearts(i);
             gDying[i] = 0;
@@ -295,6 +308,7 @@ static void UpdateDying() {
         ++gDown[i];
         bool fallEnd = gDown[i] >= kFallDeathFrames && DeathAnimEnded(p);
         if (fallEnd || gDown[i] >= kFallDeathFrames + 60) {
+            if (PartnerOut(i)) { GameOverFrom(i, "fell while the other is in a bubble / down"); continue; }
             gDown[i] = 0;
             gDownFall[i] = false;
             gBubbleBusy[i] = 0;
@@ -3960,7 +3974,8 @@ static void Update() {
     for (s32 i = 0; i < 2; i++)
         if (coop::gBubbleBusy[i] > 0) coop::gBubbleBusy[i]--;
     if (!coop::gGameOver && offIdx >= 0 && gFarFrames >= kBubbleDelay && gBubbleCooldown == 0 &&
-        !coop::gBubbleRequest[offIdx] && coop::gBubbleBusy[offIdx] == 0) {
+        !coop::gBubbleRequest[offIdx] && coop::gBubbleBusy[offIdx] == 0 &&
+        !coop::PartnerOut(offIdx)) {  // never bubble him to a brother who is down / dying / bubbled
         al::LiveActor* who = offIdx == 0 ? coop::gP1 : coop::gP2;
         al::LiveActor* to = offIdx == 0 ? coop::gP2 : coop::gP1;
         if (coop::HackActorOf(who) == nullptr && coop::HackActorOf(to) == nullptr) {
