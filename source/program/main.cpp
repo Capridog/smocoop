@@ -4370,6 +4370,51 @@ static void CapHop() {
     }
 }
 
+// A brother in a capture is solid for the other one too (3D World): he can't walk through it and
+// can land on top of it. A Goomba tower (KuriboHack) is as tall as its stack (110 per Goomba).
+static bool IsKuribo(al::LiveActor* h) {
+    uintptr_t vt = Field<uintptr_t>(h, 0) - exl::util::modules::GetTargetStart();
+    return vt == smo100::Vtbl_KuriboHack + 0x10 || vt == smo100::Vtbl_KuriboHack + 0x18;
+}
+static void CaptureBlock() {
+    for (s32 c = 0; c < 2; c++) {
+        s32 o = 1 - c;
+        al::LiveActor* h = HackActorOf(PlayerAt(c));
+        if (h == nullptr || al::isDead(h) || !Free(o)) continue;
+        // the captured Goomba rides on top of its tower: the tower stands on the bottom Goomba
+        al::LiveActor* base = h;
+        if (IsKuribo(h)) {
+            al::LiveActor* bottom = Field<al::LiveActor*>(h, 0x160);
+            if (bottom != nullptr && !al::isDead(bottom)) base = bottom;
+        }
+        const sead::Vector3f& bt = al::getTrans(base);
+        float topY = al::getTrans(h).y + (IsKuribo(h) ? 110.0f : 150.0f);
+        al::LiveActor* p = PlayerAt(o);
+        sead::Vector3f pt = al::getTrans(p);
+        float dx = pt.x - bt.x, dz = pt.z - bt.z;
+        float h2 = dx * dx + dz * dz;
+        constexpr float kR = 100.0f;
+        if (h2 > kR * kR || pt.y < bt.y - 150.0f || pt.y > topY + 40.0f) continue;
+        sead::Vector3f* v = GameGetVelocityPtr(p);
+        if (pt.y > topY - 60.0f) {
+            // on top: falling onto it stops him at its top
+            if (v != nullptr && v->y <= 0.0f) {
+                pt.y = topY;
+                GameSetTrans(p, pt);
+                v->y = 0.0f;
+            }
+            continue;
+        }
+        // from the side: pushed out to its edge
+        float d = __builtin_sqrtf(h2);
+        float nx = 1.0f, nz = 0.0f;
+        if (d > 0.01f) { nx = dx / d; nz = dz / d; }
+        pt.x = bt.x + nx * kR;
+        pt.z = bt.z + nz * kR;
+        GameSetTrans(p, pt);
+    }
+}
+
 static void Update() {
     coop::boss::gFrame++;
     for (s32 i = 0; i < 2; i++) if (gBounceCooldown[i] > 0) gBounceCooldown[i]--;
@@ -4377,6 +4422,7 @@ static void Update() {
     if (!gP2Placed) return;  // no pushing apart while Luigi is still being placed at stage start
     if (rs::isActiveDemo(gP1) || rs::isActiveDemo(gP2)) return;
     CapHop();
+    CaptureBlock();
     if (!Free(0) || !Free(1)) return;
     sead::Vector3f a = al::getTrans(gP1), b = al::getTrans(gP2);
     float dx = b.x - a.x, dz = b.z - a.z, dy = b.y - a.y;

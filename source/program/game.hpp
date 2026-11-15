@@ -244,6 +244,7 @@ constexpr u64 GameDataFunction_isPlayerHitPointMax_bytes = 0x910003fda9bf7bfdULL
 //  rs::requestBindPlayer(pipe, sensor) binds getPlayerActor(pipe, 0), i.e. only P1 in vanilla.
 constexpr ptrdiff_t Vtbl_PlayerPuppet = 0x1d7ca18 + 0x10;
 constexpr ptrdiff_t PlayerPuppet_start_fn = 0x45f714;
+constexpr ptrdiff_t Vtbl_KuriboHack = 0x1c9cf08;  // "vtable for KuriboHack"
 constexpr ptrdiff_t Vptr_Dokan = 0x1cedb90 + 0x18;
 constexpr ptrdiff_t Vptr_DokanMaze = 0x1cee9a8 + 0x18;
 constexpr ptrdiff_t Vptr_DoorWarp = 0x1cf1018 + 0x18;
