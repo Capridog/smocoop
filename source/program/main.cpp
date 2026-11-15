@@ -3929,7 +3929,21 @@ static bool IsOffScreen(al::LiveActor* actor) {
     if ((p.x - cp.x) * fx + (p.y - cp.y) * fy + (p.z - cp.z) * fz <= 0.0f) return true;  // behind
     sead::Vector2f sp;
     al::calcScreenPosFromWorldPos(&sp, camUser, p);
-    return !al::isInScreen(sp, 0.0f);
+    if (!al::isInScreen(sp, 0.0f)) return true;
+    // On an 8-bit wall that wraps around (the round tower) a brother on the far side projects
+    // inside the screen but is hidden behind the tower: count him as off-screen.
+    if (coop::GameIsPlayer2DEarly(actor)) {
+        sead::Vector3f t = al::getTrans(actor);
+        t.y += 40.0f;
+        sead::Vector3f arrow = {t.x - cp.x, t.y - cp.y, t.z - cp.z};
+        float len = __builtin_sqrtf(arrow.x * arrow.x + arrow.y * arrow.y + arrow.z * arrow.z);
+        sead::Vector3f hit;
+        if (len > 1.0f && coop::RayHit(actor, cp, arrow, &hit)) {
+            float hx = hit.x - cp.x, hy = hit.y - cp.y, hz = hit.z - cp.z;
+            if (__builtin_sqrtf(hx * hx + hy * hy + hz * hz) < len - 250.0f) return true;
+        }
+    }
+    return false;
 }
 static void Reset() {
     gZoom = 1.0f; gShare = 0.0f; gMoveP1 = gMoveP2 = 0.0f; gHavePrev = false; gLeader = -1;
@@ -4052,10 +4066,10 @@ static void Update() {
         gCourse = {0.0f, 0.0f, 0.0f};
     }
     gFull2D = -1.0f;
+    // walls go up as well as sideways (the round tower): with either brother on a wall, use the
+    // full distance for the left-behind rule below
+    if (coop::GameIsPlayer2DEarly(coop::gP1) || coop::GameIsPlayer2DEarly(coop::gP2)) gFull2D = Dist(p1, p2);
     if (both2D) {
-        // walls go up as well as sideways (the round tower): use the full distance for the
-        // left-behind rule below
-        gFull2D = Dist(p1, p2);
     } else if (gLeader < 0 && sep > kLeaderSep) {
         gLeader = gMoveP2 > gMoveP1 ? 1 : 0;
         COOP_LOG("Camera: brothers split up, following P%d", gLeader + 1);
