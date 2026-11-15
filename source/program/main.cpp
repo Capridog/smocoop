@@ -212,6 +212,7 @@ static bool PartnerAvailable(s32 i) {
 }
 // The other brother can't catch a bubble: he is in one (or about to be), going down, or dying.
 static bool PartnerOut(s32 i);
+static void PopForPipe(s32 i, al::LiveActor* leader);  // defined with the bubble flight
 
 static void RequestBubble(s32 i, const char* why) {
     if (gBubbleRequest[i] || gBubbleBusy[i] > 60) return;
@@ -3105,6 +3106,8 @@ static void* gPup[2] = {nullptr, nullptr};
 static s32 gLeader = -1;
 static u32 gFrame = 0, gStart = 0;
 static bool gFollowerStarted = false, gStartReq = false;
+static u32 gLate = 0;  // frames the follower started late (popped out of a bubble first)
+static bool gPopAsked = false;
 static s32 gDepth = 0;
 
 static bool Active() { return gLeader >= 0; }
@@ -3166,7 +3169,7 @@ static bool IsBinding(void* pup) {
 }
 static void End(const char* why) {
     if (gLeader >= 0) COOP_LOG("Pipe/door follow ended (%s)", why);
-    gLeader = -1; gHead = gTail = 0; gStartReq = false; gFollowerStarted = false;
+    gLeader = -1; gHead = gTail = 0; gStartReq = false; gFollowerStarted = false; gLate = 0; gPopAsked = false;
     coop::gIgnoreJumps = 10;
 }
 static void Reset() { End("stage change"); gPup[0] = gPup[1] = nullptr; gDepth = 0; }
@@ -3322,8 +3325,21 @@ static bool TryStartFollower(al::LiveActor* actor) {
     s32 f = 1 - gLeader;
     void* pup = gPup[f];
     void* keeper = coop::Field<void*>(actor, smo100::PlayerActorHakoniwa_bindKeeper);
+    // In a bubble (3D World): the bubble pops at once beside the pipe and he follows through as
+    // soon as he is out of it. A brother who is dying / going down stays behind.
+    if (coop::gDying[f] == 0 && coop::gDown[f] == 0 && !coop::gGameOver &&
+        (coop::gBubbleRequest[f] || coop::gBubbleBusy[f] > 60)) {
+        if (!gPopAsked) {
+            gPopAsked = true;
+            coop::PopForPipe(f, coop::PlayerAt(gLeader));
+            COOP_LOG("Pipe/door: P%d is in a bubble, popping it to follow through", f + 1);
+        }
+        if (gFrame - gStart > 60 * 6) { End("follower stuck in a bubble"); return false; }
+        gStartReq = true;  // try again next frame
+        return false;
+    }
     if (pup == nullptr || keeper == nullptr || coop::HackActorOf(actor) != nullptr ||
-        coop::gBubbleBusy[f] > 0 || coop::gGameOver || al::isDead(actor) || IsBinding(pup) ||
+        coop::gBubbleBusy[f] > 60 || coop::gGameOver || al::isDead(actor) || IsBinding(pup) ||
         coop::Field<void*>(keeper, 0x8) != nullptr) {
         End("follower busy");
         return false;
@@ -3338,6 +3354,7 @@ static bool TryStartFollower(al::LiveActor* actor) {
                  reinterpret_cast<const al::Nerve*>(exl::util::modules::GetTargetStart() +
                                                     smo100::NrvPlayerBind));
     gFollowerStarted = true;
+    gLate = gFrame - gStart > (u32)kDelay ? gFrame - gStart - kDelay : 0;
     COOP_LOG("Pipe/door: P%d now following through", f + 1);
     return true;
 }
@@ -3366,7 +3383,7 @@ static void Update() {
     }
     void* fp = gPup[1 - gLeader];
     if (!IsBinding(fp)) { End("follower left the bind"); return; }
-    while (gTail != gHead && gQ[gTail % 1024].frame + kDelay <= gFrame) {
+    while (gTail != gHead && gQ[gTail % 1024].frame + kDelay + gLate <= gFrame) {
         Entry e = gQ[gTail++ % 1024];
         Replay(e, fp);
         if (e.kind == K0 && (e.slot == 1 || e.slot == 2)) { End("follower came out"); return; }
@@ -3562,6 +3579,22 @@ constexpr s32 kBubbleNoPopFrames = 30;
 static bool gBubblePop[2] = {false, false};
 static bool gBubbleInto2D[2] = {false, false};  // popped by a brother in a 2D section
 static sead::Vector3f gBubblePopPos[2] = {};
+namespace coop {
+// The leader went into a pipe while this brother floats in a bubble: pop it now, dropping him at
+// the leader (the pipe follow then takes him through). A bubble not yet started is just dropped.
+static void PopForPipe(s32 i, al::LiveActor* leader) {
+    if (gBubbleRequest[i]) {
+        gBubbleRequest[i] = false;
+        gForcedRecovery[i] = 0;
+        gBubbleBusy[i] = 0;
+        return;
+    }
+    sead::Vector3f pp = al::getTrans(leader);
+    pp.y += 40.0f;
+    ::gBubblePopPos[i] = pp;
+    ::gBubblePop[i] = true;
+}
+}  // namespace coop
 
 extern void GameSetVelocity(al::LiveActor*, const sead::Vector3f&) asm(
     "_ZN2al11setVelocityEPNS_9LiveActorERKN4sead7Vector3IfEE");
